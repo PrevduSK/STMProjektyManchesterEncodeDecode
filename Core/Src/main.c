@@ -543,6 +543,7 @@ int main(void)
   falling_Flag = false;
  // p_rising_Flag = rising_Flag;
   //p_falling_Flag = falling_Flag;
+  uint32_t tim2_chan1_capt=0;
   uint16_t recived_mass[10]={0}, tim2_count=0;
   uint8_t recived_decod_mass[10]={0};
   //register _Bool massg_ovf= false;
@@ -561,6 +562,7 @@ int main(void)
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas medzi v ms:\r\n");
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
   *uart_mass_buf = 0;
+  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "");
  // HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
   //last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
   tick_count_prim = 0, tick_count_one = 0, tick_count_zero = 0;
@@ -583,15 +585,22 @@ int main(void)
   //while ( __HAL_TIM_GET_COUNTER(&htim2)  )
   //__HAL_TIM_DISABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_1);
 
+  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 3 ); // for chanel of timer
+
   while (1)
   {
-	  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim );
-	  tim2_count = __HAL_TIM_GET_COUNTER(&htim2);
-	  //tim2_count = __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1);
+	  tim2_chan1_capt = __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1);
+	  if ( tim2_chan1_capt <= 3 )// __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim );
+	  {
+		  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%ld <= 3\r\n", tim2_chan1_capt);
+		  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+	  }
+	  tim2_count = __HAL_TIM_GET_COUNTER(&htim2); // from timer
+
 	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %d\r\n", tim2_count);
 	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
-	  HAL_Delay(100);
+	  HAL_Delay(800);
 	  if (count >= 16) {
 		 // HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
 		 // count++;
@@ -957,13 +966,15 @@ static void MX_TIM1_Init(void)
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
-  	  	  // (160 000 000 -1)/ 1 000 000 = 159,999 =~ 160 divider
-  	  	  // 1/1 000 000 = 0,000 001s *999 = 0,001 s
+  	  // (160 000 000 -1)/ 10 000 = 15999,999 =~ 16000 divider
+  	  // 1/10 000 = 0,0001 s *(999 +1) = 0,1 s
+  	  	  // Prescaler: 160 000 000 / 16000 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
+    	  // Period: 0,0001 * (4999 +1) = 0,5 s = 500 ms end of period
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 16000;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 9999;
+  htim1.Init.Period = 4999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -1038,12 +1049,13 @@ static void MX_TIM2_Init(void)
   TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
-
+  	  // Prescaler: 160 000 000 / 16000 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
+  	  // Period: 0,0001 * (9 +1) = 0,001 s = 1 ms end of period
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 159;
+  htim2.Init.Prescaler = 16000;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 999999;
+  htim2.Init.Period = 9;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
