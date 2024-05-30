@@ -16,12 +16,10 @@ while ( endless loop ) is (yes)
 
 	split
 	if ( count_edge == 2 ) then (yes)
-		:HAL_NVIC_DisableIRQ(EXTI0_IRQn); \n__HAL_TIM_SET_COUNTER(&htim2, tick_count_prim); \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 );;
+		:tick_count_prim_half =   (uint32_t) (tick_count_prim/2 );;
 	endif
 	if (count_bit >= 16) then (yes)
-		' // HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
-		' // count++;
-		:recived_mass[massg_count] = manchester_mass;;
+		:HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1); \nHAL_NVIC_DisableIRQ(EXTI0_IRQn); \nrecived_mass[massg_count] = manchester_mass;;
 		if (massg_count < MAX_mass_recived) then (yes)
 			:massg_count++;;
 		endif
@@ -45,17 +43,17 @@ if ( edge_rise_fall_Flag || tim_count_reset_Flag )  then (yes)
 	  
 	  	  if ( tick_count_prim != 0 ) then (yes)
 	  	  
-	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= tick_count_prim_half ) then (yes)
+	  		  while ( __HAL_TIM_GET_COUNTER(&htim2) <= tick_count_prim_half ) is (yes)
 	  		  
-	  			:bit_read_enab= true;;
-	  		  endif
+	  		  endwhile
+				:bit_read_enab= true;;
 	  	  
 	  	  else (no)
 	  	  
-	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= 20U ) then (yes)
+	  		  while ( __HAL_TIM_GET_COUNTER(&htim2) <= 200U ) is (yes)
 	  		  
-	  			:bit_read_enab= true;;
-	  		  endif
+	  		  endwhile
+				:bit_read_enab= true;;
 	  	  endif
 	  	  if ( bit_read_enab ) then (yes)
 			' // if true read
@@ -87,7 +85,9 @@ endwhile
   detach
 }
 
-' hedlers for interupt
+
+' -------------------------------- hedlers for interupt -----------------------------
+' ---------------------- Callback for TIM_OC---------------------------
 fork again
    partition "void **HAL_TIM_OC_DelayElapsedCallback**(TIM_HandleTypeDef * htim)"{
 	' start
@@ -99,13 +99,14 @@ fork again
 	end
    }
 
+' --------------------------------Callback for GPIO_EXTI------------------------------
 fork again
    partition "void **HAL_GPIO_EXTI_Rising_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
 		' //HAL_SuspendTick();
 		if (count_edge >= 2) then (2,3,..)
 			' //tick_count_zero = HAL_GetTick();  HAL_ResumeTick();
-			:HAL_NVIC_DisableIRQ(EXTI0_IRQn);;
+			' :HAL_NVIC_DisableIRQ(EXTI0_IRQn);;
 		
 		else (0,1)
 		note right: when is count_edge												
@@ -115,8 +116,8 @@ fork again
 				' //HAL_ResumeTick();
 			
 			else (no)
-				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2);;
-				' //HAL_GetTick();  HAL_ResumeTick();
+				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); \n__HAL_TIM_SET_AUTORELOAD(&htim2, tick_count_prim);;
+				' //tick_count_prim = HAL_GetTick();  HAL_ResumeTick();
 			endif
 			
 		endif
@@ -124,18 +125,20 @@ fork again
 	endif
 	end
    }
+
+
 fork again
    partition "void **HAL_GPIO_EXTI_Falling_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
 		' //HAL_SuspendTick();
 		if (count_edge >= 2) then (2,3,..)
 			' //tick_count_one = HAL_GetTick();  HAL_ResumeTick();
-			:HAL_NVIC_DisableIRQ(EXTI0_IRQn);;
+			' :HAL_NVIC_DisableIRQ(EXTI0_IRQn);;
 		
 		else (0,1)		
 			if (manchester_IEEE) then (yes)
-				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2);; 
-				' //HAL_GetTick();  HAL_ResumeTick();
+				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); \n__HAL_TIM_SET_AUTORELOAD(&htim2, tick_count_prim);; 
+				' // tick_count_prim = HAL_GetTick();  HAL_ResumeTick();
 			else (no)
 				:HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);; 
 				' //HAL_ResumeTick();
@@ -149,8 +152,9 @@ fork again
 end fork
 ' end merge
 
+
 partition "int **main**(void)" {
-:HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);;
+:code;
 }
 stop
 
