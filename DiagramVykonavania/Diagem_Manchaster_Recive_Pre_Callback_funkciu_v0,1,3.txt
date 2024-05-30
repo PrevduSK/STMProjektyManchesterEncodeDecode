@@ -6,44 +6,155 @@ start
 ' This set can read 0s signal or 1s signal, but it not read data
 ' This set read values after Falling or Rising, but not between 
 
-while ( True ) is (yes)
+partition "**function** main()" {
+:HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+fork
+partition "**function** main() while" {
+while ( endless loop ) is (yes)
 
-  if (caount >= 16) then (yes)
-    :recived_mass[massg_count] = manchester_mass;
-    if (mass_count < MAX_mass_recived) then (yes)
-      :massg_count++;
-    endif
-  endif
-  if ( massg_count == MAX_mass_recived ) then (yes)
-    :HAL_NVIC_DisableIRQ(EXTI0_IRQn) \nbreak;
-  endif
 
-  while ( HAL_GetTick() <= (uint32_t) (tick_count_prim/2) ) is (yes)
-     :do no operation;
-  endwhile (no)
+	if ( count_edge > 1 ) then (yes)
+		:HAL_NVIC_DisableIRQ(EXTI0_IRQn) \n__HAL_TIM_SET_COUNTER(&htim2, tick_count_prim) \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 );
+	endif
+	if (count_bit >= 16) then (yes)
+		' // HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
+		' // count++;
+		:recived_mass[massg_count] = manchester_mass;
+		if (massg_count < MAX_mass_recived) then (yes)
+			:massg_count++;
+		endif
+		' // HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), 1);
+		:count_bit = 0; 
+		' //manchester_mass = 0;
+	endif
 
-  if (falling_Flag == true) then (yes)
-    'pridaj hodontu do
-    
-    if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET) then (yes)
-	' //&&
-       :manchester_mass |= 0 \nmanchester_mass <<= 1 \ncount++ \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) \nfalling_Flag = false;
-    endif			  
-  elseif (rising_Flag == true) then (yes)
-     if (HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) then (yes)
-     	:manchester_mass |= 1 \nmanchester_mass <<= 1 \ncount++ \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) \nrising_Flag = false;
-     endif
-				  
-  endif
+	if ( massg_count == MAX_mass_recived ) then (yes)
+		  ' //HAL_SuspendTick();
+		  :break;
+		 stop
+		
+	endif
+
+if ( (rising_Flag || falling_Flag) || tim_count_reset_Flag )  then (yes)
+	  
+	  	  if ( tick_count_prim != 0 ) then (yes)
+	  	  
+	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= tick_count_prim_half ) then (yes)
+	  		  
+	  			:bit_read_enab= true;
+	  		  endif
+	  	  
+	  	  else
+	  	  
+	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= 20U ) then (yes)
+	  		  
+	  			:bit_read_enab= true;
+	  		  endif
+	  	  endif
+	  	  if ( bit_read_enab ) then (yes)
+			' // if true read
+	  	  
+			  if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET) then (yes)
+			  
+				  :manchester_mass |= 0;
+				  :manchester_mass <<= 1;
+				  :count_bit++;
+				  :last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
+				  :HAL_UART_Transmit(&huart1, (uint8_t *) "0", sizeof("0"), 1);
+				 ' // falling_Flag = false;//!falling_Flag;
+			  endif
+
+		      if(HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) then (yes)
+		      '	// read start val, Low
+		    	 :manchester_mass |= 1;
+		    	 :manchester_mass <<= 1;
+		    	 :count_bit++;
+		    	 :last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
+		    	 :HAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);
+		    	'  //rising_Flag = false;//!rising_Flag;
+		      endif
+		      :tim_count_reset_Flag = false;
+		      :bit_read_enab = false;
+		      :rising_Flag = false;
+			:falling_Flag = false;
+
+	  	  endif
+
+
+  	  endif
+
+
 
   
 
-endwhile (no)
+endwhile
+-[hidden]->
+  detach
+}
+fork again
+   partition "void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)"{
+	' start
+       if (htim->Instance == TIM2) is (yes)
+    	:tim_count_reset_Flag = true;
+    	' //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Enterd to OC Delay.\r\n");
+    	' //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+    	endif
+	end
+   }
+fork again
+   partition "void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)"{
+	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
+		' //HAL_SuspendTick();
+		if (count_edge >= 2) then (2,3,..)
+			' //tick_count_zero = HAL_GetTick();  HAL_ResumeTick();
+			:rising_Flag = true;
+			:falling_Flag = false;
+		
+		else (0,1)
+		note right: when is count_edge												
+			' // == 0,1
+			if (manchester_IEEE) then (yes)
+				:HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); 
+				' //HAL_ResumeTick();
+			
+			else (no)
+				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); 
+				' //HAL_GetTick();  HAL_ResumeTick();
+			endif
+			:rising_Flag = true;
+			:falling_Flag = false;
+		endif
+		:count_edge++;
+	endif
+	end
+   }
+fork again
+   partition "void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)"{
+	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
+		' //HAL_SuspendTick();
+		if (count_edge >= 2) then (2,3,..)
+			' //tick_count_one = HAL_GetTick();  HAL_ResumeTick();
+			:rising_Flag = false;
+			:falling_Flag = true;
+		
+		else (0,1)		
+			if (manchester_IEEE) then (yes)
+				:tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); 
+				' //HAL_GetTick();  HAL_ResumeTick();
+			else (no)
+				:HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); 
+				' //HAL_ResumeTick();
+			endif
+			:rising_Flag = false;
+			:falling_Flag = true;
+		endif
+		:count_edge++;
+	endif
+	end
+   }
+' end fork
+end merge
 
 
-
-
-
-
-stop
 @enduml

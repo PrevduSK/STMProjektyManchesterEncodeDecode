@@ -341,7 +341,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
 		//HAL_SuspendTick();
-		if (count_edge > 2)		// >= 2
+		if (count_edge >= 2)		// >= 2
 		{	//tick_count_one = HAL_GetTick();  HAL_ResumeTick();
 			rising_Flag = false;
 			falling_Flag = true;
@@ -409,7 +409,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
 		//HAL_SuspendTick();
-		if (count_edge > 2) 		// >= 2
+		if (count_edge >= 2) 		// >= 2
 		{	//tick_count_zero = HAL_GetTick();  HAL_ResumeTick();
 			rising_Flag = true;
 			falling_Flag = false;
