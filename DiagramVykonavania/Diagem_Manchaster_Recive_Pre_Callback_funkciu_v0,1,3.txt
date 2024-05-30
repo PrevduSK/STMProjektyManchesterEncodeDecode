@@ -1,0 +1,49 @@
+@startuml
+title function FallingCallback() processing
+' comment
+start
+
+' This set can read 0s signal or 1s signal, but it not read data
+' This set read values after Falling or Rising, but not between 
+
+while ( True ) is (yes)
+
+  if (caount >= 16) then (yes)
+    :recived_mass[massg_count] = manchester_mass;
+    if (mass_count < MAX_mass_recived) then (yes)
+      :massg_count++;
+    endif
+  endif
+  if ( massg_count == MAX_mass_recived ) then (yes)
+    :HAL_NVIC_DisableIRQ(EXTI0_IRQn) \nbreak;
+  endif
+
+  while ( HAL_GetTick() <= (uint32_t) (tick_count_prim/2) ) is (yes)
+     :do no operation;
+  endwhile (no)
+
+  if (falling_Flag == true) then (yes)
+    'pridaj hodontu do
+    
+    if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET) then (yes)
+	' //&&
+       :manchester_mass |= 0 \nmanchester_mass <<= 1 \ncount++ \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) \nfalling_Flag = false;
+    endif			  
+  elseif (rising_Flag == true) then (yes)
+     if (HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) then (yes)
+     	:manchester_mass |= 1 \nmanchester_mass <<= 1 \ncount++ \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) \nrising_Flag = false;
+     endif
+				  
+  endif
+
+  
+
+endwhile (no)
+
+
+
+
+
+
+stop
+@enduml
