@@ -58,10 +58,11 @@ const _Bool manchester_IEEE= true, MSB_Frst_E= true;
 //_Bool * p_rising_Flag, * p_falling_Flag;
 volatile _Bool  rising_Flag;
 volatile _Bool  falling_Flag;
+volatile _Bool  tim_count_reset_Flag;
  //manchester_IEEE= true//, log. 0 --> 10, 1 --> 01
 						// manchester_IEEE= false, log. 0 --> 01, 1 --> 10
 char uart_mass_buf[40];
-volatile uint8_t  massage, count= 0, comp_bit= 0; //"hello!"  massage = 'h',
+volatile uint8_t  massage, count_bit= 0, count_edge= 0, comp_bit= 0; //"hello!"  massage = 'h',
 volatile uint8_t mask_8;
 volatile uint8_t clk = 0;
 volatile uint16_t  manchester_mass;
@@ -125,8 +126,8 @@ void manchester_send_bite_half_tick(uint8_t massage_bite)
 	   if(MSB_Frst_E){ mask_8 >>= 1; }
 	   else { mask_8 <<= 1; }
 	}
-	if (count != 15) {
-	    count++;
+	if (count_bit != 15) {
+	    count_bit++;
 
 	    manchester_mass <<= 1; // ked je vstup 11 vypise 00
 	}
@@ -265,9 +266,20 @@ void receive_manchester_data(uint8_t * massage_recived, uint8_t * clk)
 }
 
 
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef * htim)
+{
+	// are executed by set HAL_TIM_Base_Start_IT(&htim2);
+	if (htim->Instance == TIM2)
+	{
+		tim_count_reset_Flag = true;
+		//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Enterd to Period.\r\n");
+		//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+	}
+}
+
 void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 {
-
+	// are executed by set HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
     if (htim->Instance == TIM1)
     {
     	//HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
@@ -297,8 +309,8 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
     		if(MSB_Frst_E){ mask_8 >>= 1; }
     		else { mask_8 <<= 1; }
     	}
-    	if (count != 15) {
-    		count++;
+    	if (count_bit != 15) {
+    		count_bit++;
 
     		manchester_mass <<= 1; // ked je vstup 11 vypise 00
     	}
@@ -307,7 +319,9 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 
     if (htim->Instance == TIM2)
     {
-
+    	tim_count_reset_Flag = true;
+    	//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Enterd to OC Delay.\r\n");
+    	//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
     }
     // return;
 
@@ -326,22 +340,23 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
-		HAL_SuspendTick();
-		if (count > 2)		// >= 2
-		{	tick_count_one = HAL_GetTick();  HAL_ResumeTick();
+		//HAL_SuspendTick();
+		if (count_edge > 2)		// >= 2
+		{	//tick_count_one = HAL_GetTick();  HAL_ResumeTick();
 			rising_Flag = false;
 			falling_Flag = true;
 		}
 		else 		// == 0, 1
 		{	if (manchester_IEEE){
-				tick_count_prim = HAL_GetTick();  HAL_ResumeTick();
+				tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); //HAL_GetTick();  HAL_ResumeTick();
 			}
 			else {
-				HAL_ResumeTick();
+				HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); //HAL_ResumeTick();
 			}
 			rising_Flag = false;
 			falling_Flag = true;
 		}
+		count_edge++;
 		//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%ld\r\n", tick_count_prim);
 		//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 		//count++;
@@ -393,21 +408,24 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin){
 
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
-		HAL_SuspendTick();
-		if (count > 2) 		// >= 2
-		{	tick_count_zero = HAL_GetTick();  HAL_ResumeTick();
+		//HAL_SuspendTick();
+		if (count_edge > 2) 		// >= 2
+		{	//tick_count_zero = HAL_GetTick();  HAL_ResumeTick();
 			rising_Flag = true;
 			falling_Flag = false;
 		}
 		else
 		{												// == 0,1
-			if (manchester_IEEE){	HAL_ResumeTick(); }
+			if (manchester_IEEE)
+			{	HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); //HAL_ResumeTick();
+			}
 			else
-			{	tick_count_prim = HAL_GetTick();  HAL_ResumeTick();
+			{	tick_count_prim = __HAL_TIM_GET_COUNTER(&htim2); //HAL_GetTick();  HAL_ResumeTick();
 			}
 			rising_Flag = true;
 			falling_Flag = false;
 		}
+		count_edge++;
 		//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%ld\r\n", tick_count_prim);
 		//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 		//count++;
@@ -452,34 +470,6 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin){
 		} */
 	}
 }
-
-/*
-void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin) {
-
-	if (GPIO_Pin == Manchaster_In_Pin)
-		{
-			HAL_SuspendTick();
-			tick_count = HAL_GetTick();
-			HAL_ResumeTick();
-			while ( HAL_GetTick() <= (uint32_t) (tick_count/3) ) {}
-			if ( HAL_GetTick() >= (uint32_t) (tick_count/3) ) {
-				if(HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) ) { // read start val
-					  manchester_mass |= 1;
-					  manchester_mass <<= 1;
-					  count++;
-				  }
-				  else{
-					  manchester_mass |= 0;
-					  manchester_mass <<= 1;
-					  count++;
-				  }
-				manchester_mass |= 1;
-				manchester_mass <<= 1;
-				count++;
-			}
-
-		}
-} */
 
 /* USER CODE END 0 */
 
@@ -541,13 +531,16 @@ int main(void)
   //manchester_mass;
   rising_Flag = false;
   falling_Flag = false;
+  tim_count_reset_Flag = false;
  // p_rising_Flag = rising_Flag;
   //p_falling_Flag = falling_Flag;
-  uint32_t tim2_chan1_capt=0;
-  uint16_t recived_mass[10]={0}, tim2_count=0;
+  uint32_t tim2_chan1_comp=0, tim2_count=0;
+  uint16_t recived_mass[10]={0};
   uint8_t recived_decod_mass[10]={0};
   //register _Bool massg_ovf= false;
   register uint8_t massg_count= 0;
+  register volatile _Bool bit_read_enab= false;
+  register uint32_t tick_count_prim_half =0;
   //manchester_mass = 0x8000;
 
  // *manchester_mass = 0;
@@ -556,7 +549,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Zaciatok behu.\r\n", count);
+  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Zaciatok behu.\r\n", count_bit);
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas medzi v ms:\r\n");
@@ -578,8 +571,9 @@ int main(void)
   } */
 #define MAX_mass_recived 1
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-  HAL_IncTick();
-  HAL_TIM_OC_Start(&htim2, TIM_CHANNEL_1);
+ // HAL_IncTick();
+  //HAL_TIM_Base_Start_IT(&htim2);
+  //HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
 
  // HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
   //while ( __HAL_TIM_GET_COUNTER(&htim2)  )
@@ -589,114 +583,90 @@ int main(void)
 
   while (1)
   {
-	  tim2_chan1_capt = __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1);
-	  if ( tim2_chan1_capt <= 3 )// __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim );
+	  //tim2_count = __HAL_TIM_GET_COUNTER(&htim2); // from timer
+	  //__HAL_TIM_SET_COUNTER(&htim2, 19);
+	 // snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %ld\r\n", tim2_count);
+	 // HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+	  if ( count_edge > 1 )
 	  {
-		  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%ld <= 3\r\n", tim2_chan1_capt);
-		  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+		  HAL_NVIC_DisableIRQ(EXTI0_IRQn);
+		  __HAL_TIM_SET_COUNTER(&htim2, tick_count_prim);
+		  tick_count_prim_half =   (uint32_t) (tick_count_prim/2 );
 	  }
-	  tim2_count = __HAL_TIM_GET_COUNTER(&htim2); // from timer
-
-	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %d\r\n", tim2_count);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-
-	  HAL_Delay(800);
-	  if (count >= 16) {
+	  if (count_bit >= 16) {
 		 // HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
 		 // count++;
 		  recived_mass[massg_count] = manchester_mass;
 		  if (massg_count < MAX_mass_recived){massg_count++;}
 		 // HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), 1);
-		  count = 0; //manchester_mass = 0;
+		  count_bit = 0; //manchester_mass = 0;
 	  }
 
 	  if ( massg_count == MAX_mass_recived ) { //count == 31 ||
-		  HAL_NVIC_DisableIRQ(EXTI0_IRQn);
 		  //HAL_SuspendTick();
 		  break;
 	  }
+
 	 // send_manchester_data( 0, &clk);
 	 // send_manchester_data( massage, &clk);
 
 
-	  if (rising_Flag || falling_Flag )  //  == true OR  == true
+	  if ( (rising_Flag || falling_Flag) || tim_count_reset_Flag )  //  == true OR  == true
 	  {
 	  	  if ( tick_count_prim != 0 )
 	  	  {
-	  		  while ( HAL_GetTick() <= (uint32_t) (tick_count_prim/2) ) {}
+	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= tick_count_prim_half )
+	  		  {
+	  			bit_read_enab= true;
+	  		  }
 	  	  }
 	  	  else
 	  	  {
-	  		  while ( HAL_GetTick() <= 2U ) {}
+	  		  if( __HAL_TIM_GET_COUNTER(&htim2) <= 20U )
+	  		  {
+	  			bit_read_enab= true;
+	  		  }
+	  	  }
+	  	  if ( bit_read_enab ) // if true read
+	  	  {
+			  if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET)  //&& count == 0
+			  {
+				  manchester_mass |= 0;
+				  manchester_mass <<= 1;
+				  count_bit++;
+				  last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
+				  HAL_UART_Transmit(&huart1, (uint8_t *) "0", sizeof("0"), 1);
+				  // falling_Flag = false;//!falling_Flag;
+			  }
+
+		      if(HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) // && count == 0
+		      { // read start val, Low
+		    	 manchester_mass |= 1;
+		    	 manchester_mass <<= 1;
+		    	 count_bit++;
+		    	 last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
+		    	 HAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);
+		    	  //rising_Flag = false;//!rising_Flag;
+		      }
+		      tim_count_reset_Flag = false;
+		      bit_read_enab = false;
+		      rising_Flag = false;
+			  falling_Flag = false;
+
 	  	  }
 
+
   	  }
-
-
-	  if( falling_Flag ) // == true
-	  {
-
-		  if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET)  //&& count == 0
-		  {
-			  manchester_mass |= 10;
-			  manchester_mass <<= 2;
-			  count+=2;
-			  last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
-			  HAL_UART_Transmit(&huart1, (uint8_t *) "10", sizeof("10"), 1);
-			  // falling_Flag = false;//!falling_Flag;
-		  }
-		//  if ( tick_count_prim != 0 && (tick_count_prim*2) <= tick_count_one ) // vzdi bude True
-			  // statment if always true, becous tick_one is more then tick_prime
-			  // tick_one is more then tick_prime in case recived signal is all 0s or 1s
-			  // tick_prime is long as half of signal tick
-			  //
-	//	  {
-		//	  while ( HAL_GetTick() <= tick_count_one ) {}
-		//	  if (last_state_pin == HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) )
-		//	  {
-		//		  manchester_mass |= 01;
-		//		  manchester_mass <<= 2;
-		//		  count+=2;
-		//		  HAL_UART_Transmit(&huart1, (uint8_t *) "01.", sizeof("01."), 1);
-		//	  }
-			  //else { falling_Flag = false;} // set false
-		//	  tick_count_one = 0;
-		//  }
-
-		  falling_Flag = false;
-	  }
-	  else if( rising_Flag ) //  == true
-	  {
-
-	      if(HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) // && count == 0
-	      { // read start val, Low
-	    	 manchester_mass |= 01;
-	    	 manchester_mass <<= 2;
-	    	 count+=2;
-	    	 last_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
-	    	 HAL_UART_Transmit(&huart1, (uint8_t *) "01", sizeof("01"), 1);
-	    	  //rising_Flag = false;//!rising_Flag;
-	      }
-	  //    if ( tick_count_prim != 0 && (tick_count_prim*2) <= tick_count_zero )
-	  //    {
-	  //  	  while ( HAL_GetTick() <= tick_count_zero ) {}
-	  //  	  if (last_state_pin == HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) )
-	  //  	  {
-	  //  		  manchester_mass |= 10;
-	  //  		  manchester_mass <<= 2;
-	  //  		  count+=2;
-	  //  		  HAL_UART_Transmit(&huart1, (uint8_t *) "10.", sizeof("10."), 1);
-	  //  	  }
-	  //  	  tick_count_zero = 0;
-	  //    }
-	      rising_Flag = false;
-	  }
 
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
+
+  // Time stpo
+  HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
+  //HAL_TIM_Base_Stop_IT(&htim2);
 
   // podal timeru kazdu sekundu posle log. 1 / 0
   /*if(tick_count_prim != 0){
@@ -708,11 +678,11 @@ int main(void)
 	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
   } */
 
-  if (count == 17) {
+  if (count_bit == 17) {
 	  HAL_Delay(10);
-	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Toci sa v cykle.\r\n", count);
+	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Toci sa v cykle.\r\n", count_bit);
 	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-	  count++;
+	  count_bit++;
   }
   //HAL_Delay(100);
 /*
@@ -972,12 +942,12 @@ static void MX_TIM1_Init(void)
     	  // Period: 0,0001 * (4999 +1) = 0,5 s = 500 ms end of period
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 16000;
+  htim1.Init.Prescaler = 15999;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 4999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
@@ -1049,13 +1019,14 @@ static void MX_TIM2_Init(void)
   TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
-  	  // Prescaler: 160 000 000 / 16000 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
+  	  // Prescaler: 160 000 000-1 / 16000-1 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
   	  // Period: 0,0001 * (9 +1) = 0,001 s = 1 ms end of period
+  	  // 599 999 +1 ~= 60 s
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 16000;
+  htim2.Init.Prescaler = 15999;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 9;
+  htim2.Init.Period = 299999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -1312,7 +1283,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(LED_BLUE_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
