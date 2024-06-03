@@ -45,22 +45,23 @@ if ( edge_rise_fall_Flag )  then (yes)
 			:manchester_mass |= 1; \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin); \nHAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);;
 		   
 		endif
-	endif
+	
 			
-	:count_bit++;;
-	if(count_bit >= 16) then (16,17,.. >= 16)
+		:count_bit++;;
+		if(count_bit >= 16) then (16,17,.. >= 16)
 					' :HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
-		:HAL_NVIC_DisableIRQ(EXTI0_IRQn); \nrecived_mass[massg_count] = manchester_mass;;
-		if (massg_count < MAX_mass_recived) then (yes)
-			note right: MAX_mass_recived == 1
-			:massg_count++;;
-		endif
+			:HAL_NVIC_DisableIRQ(EXTI0_IRQn); \nrecived_mass[massg_count] = manchester_mass;;
+			if (massg_count < MAX_mass_recived) then (yes)
+				note right: MAX_mass_recived == 1
+				:massg_count++;;
+			endif
 					' // HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), 1);
-		:count_bit = 0;;
+			:count_bit = 0;;
 					' //manchester_mass = 0;
 		else ( 0,1, ..,15)
 			:manchester_mass <<= 1;;
 		endif
+	endif
 
 	  endif
 	if ( massg_count == MAX_mass_recived ) then (yes)
