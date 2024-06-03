@@ -631,7 +631,7 @@ int main(void)
 		  time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;
 
 		 // while ( (HAL_GetTick() - tick_count_last_edge) < time_delay ) {}
-	  	  if ( (HAL_GetTick() - tick_count_last_edge) > Time_delay_Count_not_set )  //__HAL_TIM_GET_COUNTER(&htim2)
+	  	  if ( (HAL_GetTick() - tick_count_last_edge) > time_delay )  //__HAL_TIM_GET_COUNTER(&htim2)
 	  	  {
 	  		  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_cunt_current_edge), time_delay);
 	  		  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);

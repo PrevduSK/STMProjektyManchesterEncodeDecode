@@ -17,17 +17,18 @@ while (  **While** endless loop ) is (yes)
 	'  ---------------------------- edge_Flag rection ------------------------- 
 if ( edge_rise_fall_Flag )  then (yes) 
 		
+	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;;
 '	floating note left: || OR
-	:edge_rise_fall_Flag = false; \nbit_read_enab = true; \ninterval_btw_tick = tick_cunt_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge;;
-	
+   		floating note left:   Time_delay_Count_not_set == 120U ~ 120ms
+	if ( (HAL_GetTick() - tick_count_last_edge) > time_delay ) is (yes)
+		:edge_rise_fall_Flag = false; \nbit_read_enab = true; \ninterval_btw_tick = tick_cunt_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge;;	  	
+	endif
+	  
+
 	if ( count_edge == 2 ) then (yes)
 		:tick_count_prim = interval_btw_tick; \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 );;
 	endif
-	 
-	while ( (HAL_GetTick() - tick_count_last_edge) < Time_delay_Count_not_set ) is (yes)
-	  	
-	endwhile
-	  floating note left:   Time_delay_Count_not_set == 120U ~ 120ms	
+	
 	if ( bit_read_enab ) then (yes)
 				
 	  	:bit_read_enab = false;;	
