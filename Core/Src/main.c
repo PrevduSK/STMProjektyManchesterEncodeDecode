@@ -562,9 +562,9 @@ int main(void)
   uint8_t recived_decod_mass[10]={0};
   //register _Bool massg_ovf= false;
   register uint8_t massg_count= 0;
-  register volatile _Bool bit_read_enab= false;
-  register uint32_t interval_btw_tick =0;
-  uint32_t tick_count_prim_half = 0; // tick_count_prim_duble = 0 ; // tick_cunt_buffer =0;
+  register volatile _Bool bit_read_enab= false, interval_long = false;
+  register uint32_t interval_btw_tick =0, time_delay =0;
+  uint32_t tick_count_prim_half = 0, tick_count_prim_and_qarter =0, tick_count_prim_and_sixth =0; // tick_count_prim_duble = 0 ; // tick_cunt_buffer =0;
   //manchester_mass = 0x8000;
 
  // *manchester_mass = 0;
@@ -608,35 +608,50 @@ int main(void)
   {
 	 // send_manchester_data( 0, &clk);
 	 // send_manchester_data( massage, &clk);
+	/*  if ( tick_count_prim != 0 )
+	  {
+		  if ( (HAL_GetTick() - tick_count_last_edge) > tick_count_prim )
+		  {
+			  tim_count_reset_Flag = true;
+		  }
+	  } */
 
 	  if ( edge_rise_fall_Flag )  //  == true OR  == true  //|| tim_count_reset_Flag
 	  {
-		  edge_rise_fall_Flag = false;
+		  /*edge_rise_fall_Flag = false;
+		  tim_count_reset_Flag = false;
 		  bit_read_enab = true;
 
 		  interval_btw_tick = tick_cunt_current_edge - tick_count_last_edge;
-		  tick_count_last_edge = tick_cunt_current_edge;
+		  tick_count_last_edge = tick_cunt_current_edge;  */ // takto a cez while to ide
+
 		  //tick_cunt_buffer = __HAL_TIM_GET_COUNTER(&htim2);
+
+
+		  time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;
+
+		 // while ( (HAL_GetTick() - tick_count_last_edge) < time_delay ) {}
+	  	  if ( (HAL_GetTick() - tick_count_last_edge) > Time_delay_Count_not_set )  //__HAL_TIM_GET_COUNTER(&htim2)
+	  	  {
+	  		  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_cunt_current_edge), time_delay);
+	  		  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+			  edge_rise_fall_Flag = false;
+			  tim_count_reset_Flag = false;
+			  bit_read_enab = true;
+
+			  interval_btw_tick = tick_cunt_current_edge - tick_count_last_edge;
+			  tick_count_last_edge = tick_cunt_current_edge;
+	  	  }
 
 		  if ( count_edge == 2  ) //|| count_edge == 4
 		  {
 			  tick_count_prim = interval_btw_tick;
 			  tick_count_prim_half =   (uint32_t) (tick_count_prim/2 );
+			 // tick_count_prim_and_qarter = (tick_count_prim + (uint32_t) tick_count_prim_half/2); //	  tick_count_prim_and_sixth = (uint32_t) ((tick_count_prim *7) /6);
 			  //tick_count_prim_duble =  tick_count_prim *2; // len of clk 1 and 0
 			//  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "ph %ld, p %ld !=\r\n", tick_count_prim_half, tick_count_prim);
 			//  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 		  }
-
-
-	/*	  if ( tick_count_prim != 0 )
-		  {
-		  	while ( (HAL_GetTick() - tick_count_last_edge) < tick_count_prim_half )  //__HAL_TIM_GET_COUNTER(&htim2)
-		  	{}
-		  	bit_read_enab= true;
-		  }
-		  else {} */
-	  	  while ( (HAL_GetTick() - tick_count_last_edge) < Time_delay_Count_not_set )  //__HAL_TIM_GET_COUNTER(&htim2)
-	  		{}
 	  		//bit_read_enab= true;
 	  			//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "RE ==\r\n");
 	  			//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
@@ -644,7 +659,6 @@ int main(void)
 
 	  	  if ( bit_read_enab ) // if true read
 	  	  {
-
 	  		  bit_read_enab = false;
 
 			  if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET)  //&& count == 0
@@ -680,6 +694,7 @@ int main(void)
 				  count_bit = 0; //manchester_mass = 0;
 			  }
 			  else {  manchester_mass <<= 1; }
+
 	  	  }
 	  	//HAL_ResumeTick();
 
@@ -688,8 +703,6 @@ int main(void)
 	  //__HAL_TIM_SET_COUNTER(&htim2, 19);
 	 // snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %ld\r\n", tim2_count);
 	 // HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-
-
 
 	  if ( massg_count == MAX_mass_recived ) { //count == 31 ||
 		  //HAL_SuspendTick();
@@ -700,6 +713,39 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
   }
+
+
+  // ---------------------------------- tu je spoosb ako by mohlo fungova ked su dva signali ----------
+
+  /* if ( interval_long ) // true
+	  {
+		interval_long = false;
+		if ( last_state_pin == GPIO_PIN_RESET )
+		{
+			HAL_UART_Transmit(&huart1, (uint8_t *) "0", sizeof("0"), 1);
+		}
+		else
+		{
+			manchester_mass |= 1;
+			HAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);
+		}
+		count_bit++;
+		if ( count_bit < 16 )
+			{ manchester_mass <<= 1; }
+		else
+		{
+			  HAL_NVIC_DisableIRQ(EXTI0_IRQn);
+			  recived_mass[massg_count] = manchester_mass;
+			  if (massg_count < MAX_mass_recived){massg_count++;}
+
+			  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "edge: %d, bit: %d\r\n", count_edge, count_bit );
+			  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+			  count_bit = 0;
+			  break;
+		}
+	  } */
+
+  // ------------------------------------------------------------------------------------------
 
   // Time stpo
   //HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
