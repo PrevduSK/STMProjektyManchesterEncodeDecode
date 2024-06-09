@@ -2,7 +2,7 @@
 title menchester read with intreup and timer couter processing
 ' comment
 start
-
+' For write via VScode must by filename.puml
 ' This set can read 0s signal or 1s signal, but it not read data
 ' This set read values after Falling or Rising, but not between 
 
@@ -14,14 +14,35 @@ fork
 partition "**While** in function: int **main**(void) " {
 while (  **While** endless loop ) is (yes)
 
+if ( ( !edge_rise_fall_Flag  && !tim_count_reset_Flag ) && count_edge >= 2 ) then (yes)
+floating note left: &&  AND
+    :actual_tick = HAL_GetTick();;
+    
+	if ( tick_last_timer != 0 ) then (yes)
+		:timer_interval = actual_tick - tick_last_timer;;
+
+		if (  ( timer_interval > tick_count_prim ) && ( timer_interval <=  (uint32_t) tick_count_prim*1.5f  )   ) then (yes)
+			:tick_current_timer = HAL_GetTick(); \ntim_count_reset_Flag = true;;
+		endif
+	endif
+endif
+
+
 	'  ---------------------------- edge_Flag rection ------------------------- 
-if ( edge_rise_fall_Flag )  then (yes) 
-		
-	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;;
-'	floating note left: || OR
+if ( edge_rise_fall_Flag || tim_count_reset_Flag )  then (yes) 
+floating note left: ||  OR		
+	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set; \nlast_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;;
+
+
    		floating note left:   Time_delay_Count_not_set == 120U ~ 120ms
-	if ( (HAL_GetTick() - tick_count_last_edge) > time_delay ) is (yes)
-		:edge_rise_fall_Flag = false; \nbit_read_enab = true; \ninterval_btw_tick = tick_cunt_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge;;	  	
+	if ( (HAL_GetTick() - last_time_tick) > time_delay ) then (yes)
+		
+        if ( edge_rise_fall_Flag ) then (yes)
+            :interval_btw_tick = tick_cunt_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge; \ntick_last_timer = tick_count_current_edge;;
+        else (no) 
+            :tick_last_timer = tick_current_timer;;
+        endif
+        :bit_read_enab = true; \nedge_rise_fall_Flag = false; \ntim_count_reset_Flag = false;;
 	endif
 	  
 
@@ -45,7 +66,6 @@ if ( edge_rise_fall_Flag )  then (yes)
 			:manchester_mass |= 1; \nlast_state_pin = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin); \nHAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);;
 		   
 		endif
-	
 			
 		:count_bit++;;
 		if(count_bit >= 16) then (16,17,.. >= 16)

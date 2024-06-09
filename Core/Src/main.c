@@ -589,7 +589,7 @@ int main(void)
   tick_count_prim = 0; // tick_count_last = 0, tick_count_zero_last = 0;
 
 #define MAX_mass_recived 1U
-#define INTER_around_time 100U
+//#define INTER_around_time 100U
 #define Time_delay_Count_not_set 120U
   //HAL_Delay(600U);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
@@ -659,7 +659,7 @@ int main(void)
 	  		  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_count_current_edge), time_delay);
 	  		  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
-			  bit_read_enab = true;
+
 			  if ( edge_rise_fall_Flag )
 			  {
 				  interval_btw_tick = tick_count_current_edge - tick_count_last_edge;
@@ -673,7 +673,7 @@ int main(void)
 			  }
 			 // if ( tim_count_reset_Flag )
 
-
+			  bit_read_enab = true;
 			  edge_rise_fall_Flag = false;
 			  tim_count_reset_Flag = false;
 
