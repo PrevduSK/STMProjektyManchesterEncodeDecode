@@ -548,9 +548,9 @@ int main(void)
  // uint8_t mask_8;
   uint16_t mask_16;
   if (MSB_Frst_E){ mask_8 = 0x80;
-  	  mask_16= 0xC0;}
+  	  mask_16= 0x8000;}
   else { mask_8 = 0x01;
-  	  mask_16= 0x003;}
+  	  mask_16= 0x001;}
  // uint8_t clk = 0;
   //_Bool clk = 0;
   //GPIO_PinState last_state_pin;//
@@ -588,7 +588,7 @@ int main(void)
   register GPIO_PinState last_state_pin ; // = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
   tick_count_prim = 0; // tick_count_last = 0, tick_count_zero_last = 0;
 
-#define MAX_mass_recived 1U
+#define MAX_mass_recived 8U
 //#define INTER_around_time 100U
 #define Time_delay_Count_not_set 120U
   //HAL_Delay(600U);
@@ -616,7 +616,7 @@ int main(void)
 		  if ( tick_last_timer != 0 ) {
 			  timer_interval = actual_tick - tick_last_timer;
 
-			  if ( (  ( timer_interval > tick_count_prim ) && ( timer_interval <=  (uint32_t) tick_count_prim*1.5f  ) )  ) //
+			  if (   ( timer_interval > tick_count_prim ) && ( timer_interval <=  (uint32_t) tick_count_prim*1.5f  )   ) //
 			  {
 				  tick_current_timer = HAL_GetTick();
 				  tim_count_reset_Flag = true;
@@ -762,36 +762,6 @@ int main(void)
   }
 
 
-  // ---------------------------------- tu je spoosb ako by mohlo fungova ked su dva signali ----------
-
-  /* if ( interval_long ) // true
-	  {
-		interval_long = false;
-		if ( last_state_pin == GPIO_PIN_RESET )
-		{
-			HAL_UART_Transmit(&huart1, (uint8_t *) "0", sizeof("0"), 1);
-		}
-		else
-		{
-			manchester_mass |= 1;
-			HAL_UART_Transmit(&huart1, (uint8_t *) "1", sizeof("1"), 1);
-		}
-		count_bit++;
-		if ( count_bit < 16 )
-			{ manchester_mass <<= 1; }
-		else
-		{
-			  HAL_NVIC_DisableIRQ(EXTI0_IRQn);
-			  recived_mass[massg_count] = manchester_mass;
-			  if (massg_count < MAX_mass_recived){massg_count++;}
-
-			  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "edge: %d, bit: %d\r\n", count_edge, count_bit );
-			  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-			  count_bit = 0;
-			  break;
-		}
-	  } */
-
   // ------------------------------------------------------------------------------------------
 
   // Time stpo
@@ -802,10 +772,6 @@ int main(void)
   /*if(tick_count_prim != 0){
 	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "\r\nprim: %ld\r\n", tick_count_prim);
 	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "zero: %ld\r\n", tick_count_zero);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "one %ld\r\n", tick_count_last);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
   } */
 
   if (count_bit == 17) {
@@ -814,41 +780,43 @@ int main(void)
 	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 	  count_bit++;
   }
-  //HAL_Delay(100);
-/*
-  while ( massg_count !=0){ // --------------Decoding of manchaster
+
+  while ( massg_count >0){ // --------------Decoding of manchaster
 	  manchester_mass = recived_mass[(massg_count-1)];
 
-	  for (int bite_cnt = 0; bite_cnt <= 15; ++bite_cnt) {
+	  for (int bite_cnt = 0; bite_cnt < 7; bite_cnt++) {
+		  if (manchester_IEEE)
+		  {
+              if ( !(manchester_mass & mask_16) ) // 0b01 = 1 dec -> 1
+              { massage |= 1; }
+              else // 0b10 -> 0
+              { massage |= 0; }
+		  }
+		  else
+		  {
+              if ( (manchester_mass & mask_16) ) // 0b10 = 1 dec -> 1
+              {  massage |= 1; }
+              else // 0b01 -> 0
+              {  massage |= 0; }
+		  }
+		  if(MSB_Frst_E){ mask_16 >>= 2; }
+		  else { mask_16 <<= 2; }
 
-		if (manchester_IEEE){
-			//comp_bit =  ((manchester_mass & mask_16) == 0b01 )? 1: 0 ;
-			switch((manchester_mass & mask_16) ){
-			  	case 0b01: massage |= 1; break;  // 0b01 = 1 dec
-			  	case 0b10: massage |= 0; break;
-			  	default: break; 	// 0b10 = 2 dec
-			}
-		}
-		else {
-			switch((manchester_mass & mask_16) ){
-				case 0b10: massage |= 1; break;  // comp_bit = 1   0b01 = 1 dec
-				case 0b01: massage |= 0; break; //  comp_bit = 0
-				default: break; 	// 0b10 = 2 dec
-			}
-		}
-
-  		if(MSB_Frst_E){ mask_16 >>= 2; }
-  		else { mask_16 <<= 2; }
-  			massage <<= 1; // ked je vstup 11 vypise 00
+	      massage <<= 1; // ked je vstup 11 vypise 00
 	  }
 
 	  recived_decod_mass[(massg_count-1)] = massage;
 	  massg_count--;
-  } */
+	  if(MSB_Frst_E){ mask_16 = 0x8000; }
+	  else { mask_16 = 0x01; }
+	  clear_char_array_len(uart_mass_buf, 40);
+	  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%c", recived_decod_mass[massg_count]);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+  } //*/
 
   	//recived_decod_mas
   clear_char_array_len(uart_mass_buf, 40);
-  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Koniec.\r\n");
+  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "\r\nKoniec.\r\n");
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
   /* USER CODE END 3 */
 }
