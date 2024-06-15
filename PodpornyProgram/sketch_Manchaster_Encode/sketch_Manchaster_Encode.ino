@@ -97,8 +97,12 @@ void setup() {
   //manchester_transmit_char(0xff); //manchester_transmit_massage(0b11111111);
   
   from_user = 0;
-  unsigned char odkaz[] ="Prevdu"; //  
-  manchester_transmit_string( odkaz, 7);
+  unsigned char odkaz[] ="Prevdu"; //  Prevdu 
+  //char buffer[40];
+  //sprintf(buffer, "size of array %d\n", sizeof(odkaz)  );
+  //Serial.println(buffer);
+
+  manchester_transmit_string( odkaz, sizeof(odkaz));
   //manchester_transmit_char((uint8_t) 'd', true, true); // 0x96A9 ,0b1001 0110 1010 1001
   Serial.println("Konice!");
   //manchester_transmit_char(0xAA);// 0x6666
