@@ -289,7 +289,8 @@ void recive_manchester_data_Secund( volatile uint16_t recived_mass[], uint8_t* m
 				  clear_char_array_len(uart_mass_buf, 40);
 				  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Nedokaze pocitat cas.\r\n");
 				  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
-				  return;//end_word;
+				  end_word = false;
+				  return;//
 				  //break;
 			  }
 		  }
