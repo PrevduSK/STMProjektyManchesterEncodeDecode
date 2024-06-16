@@ -590,7 +590,7 @@ int main(void)
 
   if (MSB_Frst_E){ mask_8 = 0x80;
   	  mask_16= 0x8000;}
-  else { mask_8 = 0x01;
+  else {mask_8 = 0x01;
   	  mask_16= 0x001;}
 
 
@@ -599,11 +599,7 @@ int main(void)
   volatile uint8_t recived_decod_mass[MAX_mass_recived]={0};
   //register _Bool massg_ovf= false;
   uint8_t massg_count= 0u;
-   // tick_count_prim_duble = 0 ; // tick_cunt_buffer =0;
-  //manchester_mass = 0x8000;
 
-
- // *manchester_mass = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -612,16 +608,10 @@ int main(void)
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Zaciatok behu.\r\n", count_bit);
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
-  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas medzi v ms:\r\n");
-  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-
-
-  //*uart_mass_buf = ;
   clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
 
  // HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
   //register GPIO_PinState last_state_pin ; // = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
-  tick_count_prim = 0;
 
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
   edge_rise_fall_Flag = false;
@@ -636,6 +626,7 @@ int main(void)
 
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "w s\r\n");
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+
   while (1)
   {
 	 // send_manchester_data( 0, &clk);
