@@ -65,25 +65,25 @@ volatile _Bool  tim_count_reset_Flag = false;
 //enum {}
  //manchester_IEEE= true//, log. 0 --> 10, 1 --> 01
 						// manchester_IEEE= false, log. 0 --> 01, 1 --> 10
-#define MAX_mass_recived 10U
-#define Time_delay_Count_not_set 120U
+#define MAX_mass_recived 30U
+#define Time_delay_Count_not_set 40u  // 80u 120U
 
-// time count of edge
-volatile uint32_t tick_count_last_edge =0u, tick_count_current_edge =0u, tick_current_timer =0u, tick_last_timer;
-volatile uint32_t tick_count_prim, tick_count_zero_last, tick_count_last;
+// time count of edge and timer compare
+volatile uint32_t tick_count_current_edge =0u, tick_current_timer =0u;
+// tick_count_last;
 
-volatile uint32_t interval_btw_tick =0u, time_delay =0u, timer_interval =0u, actual_tick = 0u, count_from_if_cond =0u, last_time_tick = 0u;
+//volatile uint32_t interval_btw_tick =0u, time_delay =0u, timer_interval =0u, actual_tick = 0u, count_from_if_cond =0u, last_time_tick = 0u;
 
-uint32_t tick_count_prim_half = 0u, tick_count_prim_and_half =0u;
+
 #define UART_MASS_LEN 50
 char uart_mass_buf[UART_MASS_LEN];
 volatile uint8_t  massage, count_bit= 0, count_edge= 0, comp_bit= 0; //"hello!"  massage = 'h',
-volatile uint8_t mask_8;
+//volatile uint8_t mask_8;
 volatile uint8_t clk = 0;
-volatile uint16_t  manchester_mass;
+volatile uint16_t  manchester_mass;//, mask_16;;
 
-_Bool end_word = false;
-volatile _Bool bit_read_enab= false;// interval_long = false;
+//_Bool end_word = false;
+//volatile _Bool bit_read_enab= false;// interval_long = false;
 
 
 /* USER CODE END PV */
@@ -107,6 +107,7 @@ void manchester_send_masage_half_tick(uint8_t massage_bite);
 void send_manchester_data(uint8_t  massage, uint8_t * clk);
 void receive_manchester_data(uint8_t * massage_recived, uint8_t * clk);
 void recive_manchester_data_Secund( volatile uint16_t recived_mass[], uint8_t* massg_count);
+void decode_manchester_code( volatile uint16_t recived_mass[], volatile uint8_t recived_decod_mass[], uint8_t* massg_count );
 void clear_char_array_len(char * array, uint16_t a_len);
 
 
@@ -115,7 +116,7 @@ void clear_char_array_len(char * array, uint16_t a_len);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-
+/*
 //
 void manchester_send_bite_half_tick(uint8_t massage_bite)
 {
@@ -266,6 +267,7 @@ void receive_manchester_data(uint8_t * massage_recived, uint8_t * clk)
 }
 
 void recive_manchester_data_Secund( volatile uint16_t recived_mass[], uint8_t* massg_count ){
+	register volatile uint32_t interval_btw_tick, time_delay, timer_interval, actual_tick, last_time_tick, count_from_if_cond;
 
 	if ( ( !edge_rise_fall_Flag  && !tim_count_reset_Flag ) && count_edge >= 2 ) // F and F  and 2,3 ...
 		  {
@@ -373,9 +375,59 @@ void recive_manchester_data_Secund( volatile uint16_t recived_mass[], uint8_t* m
 		  //__HAL_TIM_SET_COUNTER(&htim2, 19);
 		 // snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %ld\r\n", tim2_count);
 		 // HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
-		  return; //end_word
+		  //return; //end_word
 }
 
+void decode_manchester_code( volatile uint16_t recived_mass[], volatile uint8_t recived_decod_mass[], uint8_t* massg_count )
+{
+	while ( (*massg_count) >0)
+	{ // --------------Decoding of manchaster
+		(*massg_count)--;
+	    manchester_mass = recived_mass[(*massg_count)]; //(massg_count-1)
+	    clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+	    snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%x\r\n", manchester_mass);
+	    HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	    if(MSB_Frst_E){ mask_16 = 0x8000; }
+	    else { mask_16 = 0x01; }
+	    massage= 0;
+
+	    for (int bite_cnt = 0; bite_cnt < 8; bite_cnt++) {
+	    	if (manchester_IEEE)
+	        {  // (manchester_mass & mask_16 ) ==0 &&  ((manchester_mass & (mask_16>>1) ) > 0)
+	    		if ( !(manchester_mass & mask_16 ) && (manchester_mass & (mask_16>>1) ) ) // 0b01 = 1 dec -> 1
+	            {
+	    			massage |= 1;
+
+	            } else if ( !(manchester_mass & (mask_16>>1) ) ) // 0b10 -> 0
+	            {
+	            	massage |= 0;
+	            }
+	        }
+	        else
+	        {
+	        	if ( (manchester_mass & mask_16) ) // 0b10 = 1 dec -> 1
+	        	{  massage |= 1; }
+	            else // 0b01 -> 0
+	            {  massage |= 0; }
+	        }
+	        if(MSB_Frst_E){ mask_16 >>= 2; }
+	        else { mask_16 <<= 2; }
+
+	        if ( bite_cnt < 7) {
+	                  massage <<= 1; // ked je vstup 11 vypise 00
+	        }
+	    }
+
+	    recived_decod_mass[(*massg_count)] = massage; //(massg_count-1)
+	    //massg_count--
+
+	    clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+	    snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%c %d\r\n", recived_decod_mass[(*massg_count)], recived_decod_mass[(*massg_count)]);
+	    HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	}
+}
+
+*/
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef * htim)
 {
 	// are executed by set HAL_TIM_Base_Start_IT(&htim2);
@@ -391,11 +443,11 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef * htim)
 void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 {
 	// are executed by set HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
-    if (htim->Instance == TIM1)
+    if (htim->Instance == TIM2)
     {
-    	__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC1);
+    	__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);
     	//HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
-    	clk = !clk; // log. 1
+    /*	clk = !clk; // log. 1
   		// Manchester: as per IEEE 802.3
     	// LSB firsth
     	comp_bit =  (massage & mask_8 )? 1: 0 ;
@@ -425,14 +477,26 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
     		count_bit++;
 
     		manchester_mass <<= 1; // ked je vstup 11 vypise 00
-    	}
+    	} */
 
     }
 
-    if (htim->Instance == TIM2)
+    if (htim->Instance == TIM1)
     {
-    	__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);
+    	__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC1);
+    	tick_current_timer = __HAL_TIM_GET_COUNTER(&htim1);//HAL_GetTick();
+
     	tim_count_reset_Flag = true;
+		/*count_from_if_cond++;
+		if ( count_from_if_cond == 0xFA0000 ){
+			clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+			snprintf(uart_mass_buf, sizeof(uart_mass_buf), "edge: %d, bit: %d\r\n", count_edge, count_bit );
+			HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+			clear_char_array_len(uart_mass_buf, 40);
+			snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Nedokaze pocitat cas.\r\n");
+			HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	  		end_word = false;
+		}*/
     	//snprintf(uart_mass_buf, sizeof(uart_mass_buf), "F OC\r\n");
     	//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
     }
@@ -445,7 +509,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
 		 __HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin);
-		 tick_count_current_edge = HAL_GetTick();
+		 tick_count_current_edge = HAL_GetTick(); // __HAL_TIM_GET_COUNTER(&htim1)
 		 edge_rise_fall_Flag = true;
 		 count_edge++;
 	}
@@ -456,7 +520,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 	if (GPIO_Pin == Manchaster_In_Pin)
 	{
 		 __HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin);
-		 tick_count_current_edge = HAL_GetTick();
+		 tick_count_current_edge = HAL_GetTick(); //; __HAL_TIM_GET_COUNTER(&htim1)
 		 edge_rise_fall_Flag = true;
 		 count_edge++;
 	}
@@ -512,8 +576,18 @@ int main(void)
   /* USER CODE BEGIN 2 */
   //_Bool manchester_IEEE= true, MSB_Frst_E= true;
 
+  register volatile uint32_t interval_btw_tick =0u, time_delay =0u, timer_interval =0u, actual_tick = 0u, last_time_tick = 0u, tick_last_timer = 0u, tick_count_last_edge =0u;
+
+  register volatile uint32_t count_from_if_cond =0u;
+  uint32_t tick_count_prim_and_half =0u, tick_count_prim =0u, tick_count_prim_half = 0u;
+
+  register volatile uint16_t mask_16;
+  register volatile uint8_t mask_8;
+  register volatile _Bool bit_read_enab = false ;
+  _Bool end_word = false;
+
   massage = 0;
-  uint16_t mask_16;
+
   if (MSB_Frst_E){ mask_8 = 0x80;
   	  mask_16= 0x8000;}
   else { mask_8 = 0x01;
@@ -538,8 +612,8 @@ int main(void)
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%d Zaciatok behu.\r\n", count_bit);
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
-  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas medzi v ms:\r\n");
-  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas medzi v ms:\r\n");
+  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
 
 
   //*uart_mass_buf = ;
@@ -547,17 +621,17 @@ int main(void)
 
  // HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
   //register GPIO_PinState last_state_pin ; // = HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin);
-  tick_count_prim = 0; // tick_count_last = 0, tick_count_zero_last = 0;
+  tick_count_prim = 0;
 
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
   edge_rise_fall_Flag = false;
   count_edge = 0;
 
-  //HAL_TIM_Base_Start_IT(&htim2); // for couter
-  //HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); // for compare with value in channe
+  //HAL_TIM_Base_Start_IT(&htim1); // for couter
+  //HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1); // for compare with value in channe
 
   //__HAL_TIM_DISABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_1);
-  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); // for chanel of timer
+  //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 299999); // for chanel of timer
   HAL_InitTick(SystemCoreClock);
 
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "w s\r\n");
@@ -566,12 +640,127 @@ int main(void)
   {
 	 // send_manchester_data( 0, &clk);
 	 // send_manchester_data( massage, &clk);
-	 // --Non blocking wait to time interval for read from GPIO
-	  recive_manchester_data_Secund(recived_mass, &massg_count );
-	  if ( end_word ) { //massg_count == MAX_mass_recived  //count == 31 ||
 
+	  //recive_manchester_data_Secund(recived_mass, &massg_count );
+	  // --Non blocking wait to time interval for read from GPIO
+	  if ( ( !edge_rise_fall_Flag  && !tim_count_reset_Flag ) && count_edge >= 2 ) // F and F  and 2,3 ...
+	  {
+		  actual_tick = HAL_GetTick();
+		  if ( tick_last_timer != 0 ) {
+			  timer_interval = actual_tick - tick_last_timer;
+			  // --When is time it set flag to do read from GPIO without waiting to interrupt
+			  if (   ( timer_interval > tick_count_prim ) && ( timer_interval <=  tick_count_prim_and_half  )   ) //
+			  {
+				  tick_current_timer = HAL_GetTick();
+				  tim_count_reset_Flag = true;
+			  }
+		  }
+
+		  count_from_if_cond++;
+		  if ( count_from_if_cond == 0xFA0000 ){
+			  clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+			  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "edge: %d, bit: %d\r\n", count_edge, count_bit );
+			  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+			  clear_char_array_len(uart_mass_buf, 40);
+			  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Nedokaze pocitat cas.\r\n");
+			  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	  				  //end_word = false;
+	  				  break;
+		  }
+	  }
+
+	  if ( edge_rise_fall_Flag  || tim_count_reset_Flag )  //  == true OR  == true  //|| tim_count_reset_Flag
+	  {
+
+		  //__HAL_TIM_GET_COUNTER(&htim2);
+		  time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;
+
+		  last_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;
+
+		  if ( ( HAL_GetTick() - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim1)
+		  {
+			  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_count_current_edge), time_delay);
+			  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+
+			  if ( edge_rise_fall_Flag )
+		  	  {
+			  	  interval_btw_tick = tick_count_current_edge - tick_count_last_edge;
+			  	  tick_count_last_edge = tick_count_current_edge;
+			  	  tick_last_timer = tick_count_current_edge;
+		  	  }
+		  	  else
+		  	  {
+			  	  tick_count_last_edge = tick_current_timer;
+			  	  tick_last_timer = tick_current_timer;
+		  	  }
+
+		  	  bit_read_enab = true;
+		  	  edge_rise_fall_Flag = false;
+		  	  tim_count_reset_Flag = false;
+		  }
+
+		  if ( count_edge == 2  )
+		  {
+			  tick_count_prim = interval_btw_tick;
+			 // __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim);
+			  tick_count_prim_half =   (uint32_t) (tick_count_prim/2 );
+			  tick_count_prim_and_half = (uint32_t) tick_count_prim*1.5f; //	  tick_count_prim_and_sixth = (uint32_t) ((tick_count_prim *7) /6);
+
+			  //  snprintf(uart_mass_buf, sizeof(uart_mass_buf), "ph %ld, p %ld !=\r\n", tick_count_prim_half, tick_count_prim);
+			  //  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+		  }
+
+		  if ( bit_read_enab ) // if true read
+		  {
+			  bit_read_enab = false;
+
+			  if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET)  //&& count == 0
+			  {
+				  // manchester_mass |= 0; // manchester_mass <<= 1;
+			  }
+			  else
+			  { // read start val, Low
+				  manchester_mass |= 1;
+			  }
+
+			  count_bit++;
+
+			  if (count_bit >= 16) {
+				  //HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
+				  //HAL_NVIC_DisableIRQ(EXTI0_IRQn);
+				  // count++;
+				  recived_mass[massg_count] = manchester_mass;
+				  if (massg_count < MAX_mass_recived){massg_count++;}
+				  else {end_word = true;}
+				  if ( (manchester_mass == 0xaaaa || manchester_mass == 0x0) || (manchester_mass == 0x5555 || manchester_mass == 0xffff) ) {end_word = true;}
+				//  else {
+					  //HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+					  //HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
+				//  }
+
+				  //clear_char_array_len(uart_mass_buf,UART_MASS_LEN);
+				  //  HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), 1);
+				  //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "edge: %d, bit: %d\r\n", count_edge, count_bit );
+				  //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+				  count_bit = 0;
+				  manchester_mass = 0;
+			  }
+			  else {  manchester_mass <<= 1; }
+			 count_from_if_cond = 0;
+		  }
+
+	  }
+	  		  //tim2_count = __HAL_TIM_GET_COUNTER(&htim2); // from timer
+	  		  //__HAL_TIM_SET_COUNTER(&htim2, 19);
+	  		 // snprintf(uart_mass_buf, sizeof(uart_mass_buf), "Cas: %ld\r\n", tim2_count);
+	  		 // HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 1);
+	  		  //return; //end_word
+	  if ( end_word ) { //massg_count == MAX_mass_recived  //count == 31 ||
+		  //HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
+		  HAL_NVIC_DisableIRQ(EXTI0_IRQn);
+		 // HAL_TIM_Base_Stop_IT(&htim1);
 		  clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
-		  snprintf(uart_mass_buf, sizeof(uart_mass_buf), ": %c |%x \r\n%c :%x \r\n", recived_mass[0], recived_mass[0], manchester_mass, manchester_mass);
+		  snprintf(uart_mass_buf, sizeof(uart_mass_buf), ": %c |%x \r\n\r\n", recived_mass[0], recived_mass[0]); // "%c :%x" , manchester_mass, manchester_mass
 		  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
 		  break;
 	  }
@@ -584,8 +773,8 @@ int main(void)
   // ------------------------------------------------------------------------------------------
 
   // Time stpo
-  //HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
-  //HAL_TIM_Base_Stop_IT(&htim2);
+  //HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
+  //HAL_TIM_Base_Stop_IT(&htim1);
 
   // podal timeru kazdu sekundu posle log. 1 / 0
   /*if(tick_count_prim != 0){
@@ -597,52 +786,54 @@ int main(void)
   snprintf(uart_mass_buf, sizeof(uart_mass_buf), "mass_count: %d \r\n", massg_count);
   HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
 
-  while ( massg_count >0)
-      { // --------------Decoding of manchaster
-          massg_count--;
-          manchester_mass = recived_mass[massg_count]; //(massg_count-1)
-          clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
-          snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%x\r\n", manchester_mass);
-          HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
-          if(MSB_Frst_E){ mask_16 = 0x8000; }
-          else { mask_16 = 0x01; }
-          massage= 0;
+  //decode_manchester_code(recived_mass, recived_decod_mass, &massg_count);
 
-          for (int bite_cnt = 0; bite_cnt < 8; bite_cnt++) {
-              if (manchester_IEEE)
-              {  // (manchester_mass & mask_16 ) ==0 &&  ((manchester_mass & (mask_16>>1) ) > 0)
-                  if ( !(manchester_mass & mask_16 ) && (manchester_mass & (mask_16>>1) ) ) // 0b01 = 1 dec -> 1
-                  {
-                      massage |= 1;
+	while ( massg_count >0)
+	{ // --------------Decoding of manchaster
+		massg_count--;
+	    manchester_mass = recived_mass[massg_count]; //(massg_count-1)
 
-                  } else if ( !(manchester_mass & (mask_16>>1) ) ) // 0b10 -> 0
-                  {
-                      massage |= 0;
-                  }
-              }
-              else
-              {
-                  if ( (manchester_mass & mask_16) ) // 0b10 = 1 dec -> 1
-                  {  massage |= 1; }
-                  else // 0b01 -> 0
-                  {  massage |= 0; }
-              }
-              if(MSB_Frst_E){ mask_16 >>= 2; }
-              else { mask_16 <<= 2; }
+	    if(MSB_Frst_E){ mask_16 = 0x8000; }
+	    else { mask_16 = 0x01; }
+	    massage= 0;
 
-              if ( bite_cnt < 7) {
-                  massage <<= 1; // ked je vstup 11 vypise 00
-              }
-          }
+	    for (int bite_cnt = 0; bite_cnt < 8; bite_cnt++) {
+	    	if (manchester_IEEE)
+	        {  // (manchester_mass & mask_16 ) ==0 &&  ((manchester_mass & (mask_16>>1) ) > 0)
+	    		if ( !(manchester_mass & mask_16 ) && (manchester_mass & (mask_16>>1) ) ) // 0b01 = 1 dec -> 1
+	            {
+	    			massage |= 1;
 
-          recived_decod_mass[massg_count] = massage; //(massg_count-1)
-           //massg_count--
+	            } else if ( !(manchester_mass & (mask_16>>1) ) ) // 0b10 -> 0
+	            {
+	            	massage |= 0;
+	            }
+	        }
+	        else
+	        {
+	        	if ( (manchester_mass & mask_16) ) // 0b10 = 1 dec -> 1
+	        	{  massage |= 1; }
+	            else // 0b01 -> 0
+	            {  massage |= 0; }
+	        }
+	        if(MSB_Frst_E){ mask_16 >>= 2; }
+	        else { mask_16 <<= 2; }
 
-          clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
-          snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%c %d\r\n", recived_decod_mass[massg_count], recived_decod_mass[massg_count]);
-          HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
-      }
+	        if ( bite_cnt < 7) {
+	                  massage <<= 1; // ked je vstup 11 vypise 00
+	        }
+	    }
 
+	    recived_decod_mass[massg_count] = massage; //(massg_count-1)
+	    //massg_count--
+
+	    clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+	    snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%c %d \t %x\r\n", recived_decod_mass[massg_count], recived_decod_mass[massg_count], manchester_mass);
+	    HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	    //clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
+	    //snprintf(uart_mass_buf, sizeof(uart_mass_buf), "%x\r\n", manchester_mass);
+	    //HAL_UART_Transmit(&huart1, (uint8_t *) uart_mass_buf, sizeof(uart_mass_buf), 2);
+	}
 
   	//recived_decod_mas
   clear_char_array_len(uart_mass_buf, UART_MASS_LEN);
