@@ -93,7 +93,7 @@ uint16_t manchester_encode_char(uint8_t message, bool print_hex= false, bool pri
     // LSB first
     comp_bit = (message & mask_8) ? 1 : 0;
     if (manchester_IEEE) {
-      if ((comp_bit ^ (clk & 0x01))) {
+      if ( comp_bit ^ (clk & 0x01) ) {
         manchester_mass |= 1;
         
       } else {

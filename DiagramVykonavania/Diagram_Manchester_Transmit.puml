@@ -1,0 +1,57 @@
+@startuml
+title Manchester write with system timer processing
+' comment
+
+
+partition "uint16_t **manchester_encode_char**(uint8_t message)" {
+    start
+    ':_Bool print_hex = false, print_dec_ofMess = false;
+    if (MSB_Frst_E) then (yes)
+        :mask_8 = 0x80;;
+    else (no) 
+        :mask_8 = 0x01;;
+    endif
+note left: MSB_Frst_E = true 
+
+    while (true) is (yes)
+        :clk = !clk; \ncomp_bit = (message & mask_8) ? 1 : 0;;
+        if ( comp_bit ^ (clk & 0x01) ) then (yes)
+            :manchester_mass |= 1;;
+        else
+            :manchester_mass |= 0;;
+        endif
+
+        if ( !(comp_bit ^ (clk & 0x01)) ) then (yes)
+            :manchester_mass |= 1;;
+        else
+            :manchester_mass |= 0;;
+        endif
+
+        if (!clk) then (yes)
+            if (MSB_Frst_E) then (yes)
+                :mask_8 >>= 1;;        
+            else 
+                :mask_8 <<= 1;;
+            endif
+        endif
+
+        if (count == 15) then (yes)
+            if(print_hex) then (yes)
+                :Serial.println(manchester_mass, HEX);;
+            endif
+            if(print_dec_ofMess) then (yes)
+                :Serial.println(message, DEC);;
+            endif
+            :return manchester_mass;;
+            break
+        endif
+
+        :count++; \nmanchester_mass <<= 1;;
+    endwhile
+
+   stop
+}
+
+
+
+@enduml
