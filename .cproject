@@ -216,4 +216,5 @@
 			<resource resourceType="PROJECT" workspacePath="/Cviko8_Menchester"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 </cproject>
