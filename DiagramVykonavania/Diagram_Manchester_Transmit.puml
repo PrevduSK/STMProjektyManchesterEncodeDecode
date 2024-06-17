@@ -3,9 +3,10 @@ title Manchester write with system timer processing
 ' comment
 
 
-partition "uint16_t **manchester_encode_char**(uint8_t message)" {
-    start
+partition "uint16_t **manchester_encode_char**(uint8_t message, bool print_hex, bool print_dec_ofMess)" {
+start
     ':_Bool print_hex = false, print_dec_ofMess = false;
+    :uint8_t count = 0, comp_bit = 0; \nuint16_t manchester_mass = 0; \nbool clk = 0;;
     if (MSB_Frst_E) then (yes)
         :mask_8 = 0x80;;
     else (no) 
@@ -15,18 +16,20 @@ note left: MSB_Frst_E = true
 
     while (true) is (yes)
         :clk = !clk; \ncomp_bit = (message & mask_8) ? 1 : 0;;
-        if ( comp_bit ^ (clk & 0x01) ) then (yes)
-            :manchester_mass |= 1;;
+        if (manchester_IEEE) then (yes)
+            if ( comp_bit ^ (clk & 0x01) ) then (yes)
+                :manchester_mass |= 1;;
+            else
+                :manchester_mass |= 0;;
+            endif
         else
-            :manchester_mass |= 0;;
+            if ( !(comp_bit ^ (clk & 0x01)) ) then (yes)
+                :manchester_mass |= 1;;
+            else
+                :manchester_mass |= 0;;
+            endif
         endif
-
-        if ( !(comp_bit ^ (clk & 0x01)) ) then (yes)
-            :manchester_mass |= 1;;
-        else
-            :manchester_mass |= 0;;
-        endif
-
+        note left: manchester_IEEE == treu
         if (!clk) then (yes)
             if (MSB_Frst_E) then (yes)
                 :mask_8 >>= 1;;        
@@ -35,13 +38,15 @@ note left: MSB_Frst_E = true
             endif
         endif
 
-        if (count == 15) then (yes)
+        if (count == 15) then (15)
             if(print_hex) then (yes)
                 :Serial.println(manchester_mass, HEX);;
             endif
+        note right: print_hex == false
             if(print_dec_ofMess) then (yes)
                 :Serial.println(message, DEC);;
             endif
+        note right: print_dec_ofMess == false
             :return manchester_mass;;
             break
         endif
@@ -49,9 +54,123 @@ note left: MSB_Frst_E = true
         :count++; \nmanchester_mass <<= 1;;
     endwhile
 
-   stop
+stop
 }
 
 
+partition "void **manchester_transmit_char**(uint16_t message_encod, bool print_hex, bool print_dec_ofMess)" {
+start
+    if (MSB_Frst_E) then (yes)
+        :mask_16 = 0x8000;;
+    else 
+        :mask_16 = 0x0001;;
+    endif
+    note left: MSB_Frst_E == true
+
+    while (true) is (yes)
+        :comp_bit = (message_encod & mask_16) ? 1 : 0;;
+        if (comp_bit) then (yes)
+            :digitalWrite(pin_manch_out, HIGH);;
+        else 
+            :digitalWrite(pin_manch_out, LOW);;
+        endif
+
+        if (MSB_Frst_E) then (yes)
+            :mask_16 >>= 1;;
+        else
+            :mask_16 <<= 1;;
+        endif
+
+        if (count == 15) then (15)
+            if(print_hex) then (yes)
+                :Serial.println(message_encod, HEX);;
+            endif
+         note right: print_hex == false
+            if(print_dec_ofMess) then (yes)
+                :Serial.println(message_encod, DEC);;
+            endif
+         note right: print_dec_ofMess == false
+            :delay(TIME_DELAY_TRANSMIT); \nbreak;;
+         note right: TIME_DELAY_TRANSMIT == 100 ~ 100ms
+            break
+        endif
+
+        :count++; \ndelay(TIME_DELAY_TRANSMIT);; 
+
+    endwhile
+  
+stop
+}
+
+
+partition "void **manchester_encode_a_transmit_char**(uint8_t message, bool print_hex, bool print_dec_ofMess)" {
+start
+    if (MSB_Frst_E) then (yes)
+        :mask_8 = 0x80;;
+    else
+        :mask_8 = 0x01;;
+    endif
+    note right: MSB_Frst_E == true
+
+    while (true) is (yes)
+        :clk = !clk; \ncomp_bit = (message & mask_8) ? 1 : 0;;
+
+        if (manchester_IEEE) then (yes)
+            if ((comp_bit ^ (clk & 0x01))) then (yes)
+                :manchester_mass |= 1; \ndigitalWrite(pin_manch_out, HIGH);;
+            else
+                :manchester_mass |= 0; \ndigitalWrite(pin_manch_out, LOW);;
+            endif
+        else
+            if (!(comp_bit ^ (clk & 0x01))) then (yes)
+                :manchester_mass |= 1; \ndigitalWrite(pin_manch_out, HIGH);;
+            else 
+                :manchester_mass |= 0; \ndigitalWrite(pin_manch_out, LOW);;
+            endif
+        endif
+        note left: manchester_IEEE == treu
+
+        if (!clk) then (yes)
+            if (MSB_Frst_E) then (yes)
+                :mask_8 >>= 1;;
+            else 
+                :mask_8 <<= 1;;
+            endif
+        endif
+
+    if (count == 15) then (15)
+        if(print_hex) then (yes)
+            :Serial.println(manchester_mass, HEX);;
+        endif
+        if(print_dec_ofMess) then (yes)
+            :Serial.println(message, DEC);;
+        endif
+
+        :delay(TIME_DELAY_TRANSMIT); \nbreak;;
+        note left: TIME_DELAY_TRANSMIT == 100 ~ 100ms
+        break
+    endif
+
+    :count++; \nmanchester_mass <<= 1; \ndelay(TIME_DELAY_TRANSMIT);;
+    endwhile
+
+stop
+}
+
+partition "void **manchester_transmit_string**(unsigned char message[], uint8_t length)" {
+start
+    
+    :uint16_t mess_buf[length];;
+    while ( for (uint8_t i = 0; i < length; i++) ) is (yes)
+        :mess_buf[i] = **manchester_encode_char**(message[i], true);;
+    endwhile
+
+    while ( for (uint8_t i = 0; i < length; i++) ) is (yes)
+        :**manchester_transmit_char**( mess_buf[i] );;
+    endwhile
+
+        :**manchester_encode_a_transmit_char**(0);;
+stop
+}
 
 @enduml
