@@ -426,7 +426,7 @@ int main(void)
   massage = 0;
 
 
-  uint32_t tim2_chan1_comp=0, tim2_count=0;
+  //uint32_t tim2_chan1_comp=0, tim2_count=0;
   volatile uint16_t recived_mass_main[MAX_mass_recived]={0};
   volatile uint8_t recived_decod_mass_main[MAX_mass_recived]={0};
   _Bool massg_End= false;
