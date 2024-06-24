@@ -54,13 +54,13 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 //TIM_HandleTypeDef * htim1_p, * htim2_p;
 //GPIO_PinState last_state_pin;//
 
-const _Bool manchester_IEEE= true, MSB_Frst_E= true;
-		//const volatile _Bool timer_counter_enable = false;
+_Bool manchester_IEEE= true, MSB_Frst_E= true;
+
 //_Bool * p_rising_Flag, * p_falling_Flag;
 //volatile _Bool  rising_Flag;
 //volatile _Bool  falling_Flag;
 // flags for interups
-volatile _Bool 	edge_rise_fall_Flag = false, tim_count_reset_Flag = false, end_word = false;
+volatile _Bool 	edge_rise_fall_Flag = false, tim_count_reset_Flag = false;
 
 volatile uint32_t count_from_if_cond =0u;
 
@@ -78,14 +78,13 @@ volatile uint32_t tick_count_current_edge =0u, tick_current_timer =0u;
 //volatile uint32_t interval_btw_tick =0u, time_delay =0u, timer_interval =0u, actual_tick = 0u, count_from_if_cond =0u, last_time_tick = 0u;
 
 
-#define UART_MESS_LEN 50
+#define UART_MESS_LEN 500//50
 char uart_mess_buf[UART_MESS_LEN];
 volatile uint8_t  message, count_edge= 0, comp_bit= 0; //"hello!"  message = 'h',
 //volatile uint8_t mask_8;
 volatile uint8_t clk = 0;
 volatile uint16_t  manchester_mess;//, mask_16;;
 
-//_Bool end_word = false;
 //volatile _Bool bit_read_enab= false;// interval_long = false;
 
 
@@ -119,7 +118,17 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 
 void manchester_decode_data_array( volatile uint16_t recived_mess[], volatile uint8_t recived_decod_mess[], uint8_t messg_count );
 
+// ---------------------------------         -----------------------------------------
 void clear_char_array_len(char * array, uint16_t a_len);
+
+void manchester_IEEE_Set(_Bool n_val);
+_Bool manchester_IEEE_Get();
+void message_MSB_Frst_E_Set(_Bool n_val);
+_Bool message_MSB_Frst_E_Get();
+
+void manchester_send_and_receive( _Bool send_data_mode_enable, _Bool timer_counter_enable, volatile uint16_t recived_mess[], volatile uint8_t recived_decod_mess[], uint8_t messg_count, unsigned char sprava[], uint8_t sprava_count );
+
+uint8_t receive_char_array( unsigned char mess_buff[], uint8_t mess_len );
 
 
 /* USER CODE END PFP */
@@ -595,7 +604,7 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 	uint32_t  tick_count_prim =0u, tick_count_prim_half = 0u; //tick_count_prim_and_half =0u;
 
 	register volatile _Bool bit_read_enab = false ;
-	//_Bool end_word = false;
+	_Bool end_word = false;
 	register volatile uint8_t count_bit= 0;
 
 	message = 0;
@@ -715,10 +724,10 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 {
 
-	// are executed by set HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
-  /*  if (htim->Instance == TIM2)
+	// are executed by set HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
+  /*  if (htim->Instance == TIM1)
     {
-    	__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);
+    	__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC1);
 
     	//HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
   		clk = !clk; // log. 1
@@ -755,7 +764,7 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 
     } */
 
-    if (htim->Instance == TIM1)
+  /*  if (htim->Instance == TIM1)
     {
     	__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC1);
 
@@ -769,7 +778,7 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 
     	}
 
-    }
+    } */
     if (htim->Instance == TIM2)
         {
         	__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);
@@ -856,6 +865,92 @@ void clear_char_array_len(char * array, uint16_t a_len)
 }
 
 
+void manchester_IEEE_Set(_Bool n_val) 	{	manchester_IEEE = n_val;	}
+_Bool manchester_IEEE_Get() 	{	return manchester_IEEE;	}
+
+void message_MSB_Frst_E_Set(_Bool n_val) 	{	MSB_Frst_E = n_val;	}
+_Bool message_MSB_Frst_E_Get() 		{	return MSB_Frst_E;		}
+
+
+void manchester_send_and_receive( _Bool send_data_mode_enable, _Bool timer_counter_enable, volatile uint16_t recived_mess[], volatile uint8_t recived_decod_mess[], uint8_t messg_count, unsigned char sprava[], uint8_t sprava_count )
+{
+	//unsigned char sprava[] = "Hello!"; // STM
+
+	if (send_data_mode_enable) // ---------------------- send
+	{
+		// manchester_encode_and_send_char( 0);
+		//manchester_encode_and_send_char( message );
+		HAL_Delay(4000);
+		HAL_UART_Transmit(&huart1, (uint8_t *) "Send m!\r\n", sizeof("Send m!\r\n"), 1);
+
+		HAL_Delay(400);
+		manchester_encode_and_send_char_array(sprava, ( sizeof(sprava)/sizeof(sprava[0]) ));
+
+	}
+	else // ------------------------ rcieve
+	{
+		HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+		edge_rise_fall_Flag = false;
+		count_edge = 0;
+
+		HAL_InitTick(SystemCoreClock);
+
+		snprintf(uart_mess_buf, sizeof(uart_mess_buf), "Receiv m!\r\n");
+		HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
+
+
+
+		if ( timer_counter_enable ) {
+
+			// for compare with value in channe
+			manchester_receive_data_array_via_timer_count(recived_mess, &messg_count);
+			// Time stpo
+			//HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
+			// HAL_TIM_Base_Stop(&htim2);
+
+		}
+		else {
+			//  HAL_InitTick(SystemCoreClock);
+
+			manchester_receive_data_array(recived_mess, &messg_count);
+
+		}
+
+
+		clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
+		snprintf(uart_mess_buf, sizeof(uart_mess_buf), "mess_count: %d \r\n", messg_count);
+		HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 2);
+
+		manchester_decode_data_array(recived_mess, recived_decod_mess, messg_count);
+
+	}
+
+    clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
+    snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n");
+    HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
+
+    for ( uint8_t index = 0; index < messg_count; ++index) {
+
+  	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "%c", recived_decod_mess[index]);
+  	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
+    }
+
+}
+
+uint8_t receive_char_array( unsigned char mess_buff[], uint8_t mess_len ) {
+	uint8_t rec_char = 0, index=0;
+    while (1) {
+        if (HAL_UART_Receive(&huart1, &rec_char, 1, 5000) == HAL_OK) { //HAL_MAX_DELAY
+        	mess_buff[index++] = rec_char;
+            if (rec_char == 0x0A || index >= mess_len) { //'\n' // enter asci code 0x0A
+                // Process the received data
+                break;
+            }
+        }
+    }
+    return index;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -902,12 +997,16 @@ int main(void)
 
   message = 0;
 
-  _Bool const send_data_mode_enable = false, timer_counter_enable = false;
+  //_Bool send_data_mode_enable_local = false, timer_counter_enable_local = false;
 
   volatile uint16_t recived_mess_local[MAX_mess_recived]={0};
   volatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0};
 
-  uint8_t messg_count_local= 0u;
+  uint8_t messg_count_local= 0u, sprava_count_local =0;
+
+  unsigned char sprava_local[MAX_mess_recived] = {0}; // STM //unsigned char
+
+  HAL_StatusTypeDef read_state;
 
   /* USER CODE END 2 */
 
@@ -920,80 +1019,118 @@ int main(void)
   clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
 
 
-
-
-      unsigned char sprava[] = "Hello!"; // STM
-
-      if (send_data_mode_enable) // ---------------------- send
-      {
-    	  // manchester_encode_and_send_char( 0);
-    	  //manchester_encode_and_send_char( message );
-    	  HAL_Delay(4000);
-    	  HAL_UART_Transmit(&huart1, (uint8_t *) "Send m!\r\n", sizeof("Send m!\r\n"), 1);
-
-    	  HAL_Delay(400);
-    	  manchester_encode_and_send_char_array(sprava, ( sizeof(sprava)/sizeof(sprava[0]) ));
-
-      }
-      else // ------------------------ rcieve
-      {
-    	  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-    	  edge_rise_fall_Flag = false;
-    	  count_edge = 0;
-
-    	  HAL_InitTick(SystemCoreClock);
-
-    	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "Receiv m!\r\n");
-    	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
+  //manchester_send_and_receive( false, false, recived_mess_local, recived_decod_mess_local, messg_count_local, sprava_local, sprava_count_local);
+  volatile uint8_t termin_mess =1, user_choice = 0;
+  volatile _Bool send_term_mess = true, end_term= false, read_term= false, read_info_not_send= true;
 
 
 
-    	  if ( timer_counter_enable ) {
-
-    		   // for compare with value in channe
+  read_info_not_send = false;
 
 
-    		  manchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local);
-    		  // Time stpo
-    		  //HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
-    		 // HAL_TIM_Base_Stop(&htim2);
-
-    	  }
-    	  else {
-    		  //  HAL_InitTick(SystemCoreClock);
-
-    		  manchester_receive_data_array(recived_mess_local, &messg_count_local);
-
-    	  }
-
-
-    	  clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
-    	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "mess_count: %d \r\n", messg_count_local);
-    	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 2);
-
-    	  manchester_decode_data_array(recived_mess_local, recived_decod_mess_local, messg_count_local);
-
-      }
 
 
 
   while (1)
   {
-	  break;
+
+
+	 // if (0){
+	  if (send_term_mess)
+	  {
+		  switch( termin_mess )
+		  {
+		  	  case 1: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n=================================" // hlavna ponuka
+		  			  "\r\nNatavenie komunikacie: \r\nPosielanie\t\t1 \r\nPrijimanie\t\t2"
+		  			  "\r\nNatavenie kodovania\t3 \r\nNastavenie MSB/LSB\t4"
+		  			  "\r\nKoniec komunikacie\t5\r\n================================="
+		  			  "\r\npredvolene nastavenie: \tNorma IEEE, a MSB");
+		  	  	   send_term_mess = false; read_term= true; read_info_not_send = true;
+		  	  	  break;
+
+		  	  case 2: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nPosielanie: \r\n  Napis spravu o dlzke max %d znakov :"
+		  			  " a stlac enter \r\n  Dalsia sprava\t \r\n  Navrt do nastaveni komunikacie\t 5 ", MAX_mess_recived);
+		  	   break;
+		  	  //case 3: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nPosielanie\t\t1"); termin_mess =4; break;
+		  	  //case 4: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nPrijimanie\t\t2\r\n"); termin_mess =5; break;
+		  	  //case 5: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nNatavenie kodovania\t3"); termin_mess =6; break;
+		  	  //case 6: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nNastavenie MSB/LSB\t4\r\n"); termin_mess =7; break;
+		  	  //case 7: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\nKoniec komunikacie\t0"); termin_mess =8; break;
+		  	  //case 8: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n================================="); termin_mess =9; break;
+		  	  //case 9: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\npredvolene nastavenie\r\nNorma IEEE, a MSB"); termin_mess =0; break;
+
+		  	  //default: snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n"); termin_mess =1; send_term_mess = false; read_term= true; break;
+
+		  }
+		  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), HAL_MAX_DELAY);
+		  clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
+
+	  }
+	  else if (read_term) {
+
+		  if(read_info_not_send )
+		  {
+			  HAL_UART_Transmit(&huart1, (uint8_t *) "\r\nnapiste volbu:\r\n", sizeof("\r\nnapiste volbu:\r\n"), HAL_MAX_DELAY);
+			  read_info_not_send = false;
+		  }
+		  if ( !read_info_not_send  )
+		  {
+			  if (HAL_UART_Receive(&huart1, &user_choice, 1,  8000) == HAL_OK ) // enter in ascii 0x0A
+			  {
+				  if ( user_choice >= '0' &&  user_choice <= '9')
+				  {
+					  HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), HAL_MAX_DELAY);
+					  HAL_UART_Transmit(&huart1, (uint8_t *) &user_choice, 1, HAL_MAX_DELAY);
+
+					  read_term = false;
+					  send_term_mess = false;
+					  read_info_not_send = true;
+				  }
+				  else
+				  {
+					  HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), HAL_MAX_DELAY);
+					  HAL_UART_Transmit(&huart1, (uint8_t *) &user_choice, 1, HAL_MAX_DELAY);
+					  HAL_UART_Transmit(&huart1, (uint8_t *) "\r\nVolba musi byt cislo <0,9>!\r\n", sizeof("Volba musi byt cislo <0,9>!\r\n"), HAL_MAX_DELAY);
+					  read_info_not_send = true;
+				  }
+
+			  }
+		  }
+
+	  }
+	  switch (user_choice) {
+		case 1:   // send
+			termin_mess =2;
+			break;
+		case 2:   // receive
+
+			break;
+		case 3:   // kodovanie
+
+			break;
+		case 4:   // MSB/LSB
+
+			break;
+		case 5:   // receive
+			end_term = true;
+			break;
+		default:
+			termin_mess =1;
+			break;
+	}
+	  if (end_term) break;
+	    //else {HAL_Delay(2000); }
+	  	//}
+
+ //break;
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
-      clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
-      snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n");
-      HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
 
-      for ( uint8_t index = 0; index < messg_count_local; ++index) {
 
-    	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "%c", recived_decod_mess_local[index]);
-    	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
-	}
+
 
   	//recived_decod_mas
   clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
