@@ -42,7 +42,6 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
-TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
@@ -56,7 +55,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 //GPIO_PinState last_state_pin;//
 
 const _Bool manchester_IEEE= true, MSB_Frst_E= true;
-		const volatile _Bool timer_counter_enable = false;
+		//const volatile _Bool timer_counter_enable = false;
 //_Bool * p_rising_Flag, * p_falling_Flag;
 //volatile _Bool  rising_Flag;
 //volatile _Bool  falling_Flag;
@@ -69,7 +68,7 @@ volatile uint32_t count_from_if_cond =0u;
  //manchester_IEEE= true//, log. 0 --> 10, 1 --> 01
 						// manchester_IEEE= false, log. 0 --> 01, 1 --> 10
 #define MAX_mess_recived 30U
-#define Time_delay_Count_not_set 20u//40u  // 80u 120U
+#define Time_delay_Count_not_set 40u  // 80u 120U
 #define Time_delay_Transmit 200
 
 // time count of edge and timer compare
@@ -102,7 +101,6 @@ static void MX_UCPD1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 static void MX_MEMORYMAP_Init(void);
-static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
@@ -389,13 +387,13 @@ void manchester_receive_data_array( volatile uint16_t recived_mess[], uint8_t* m
 		// --Non blocking wait to time interval for read from GPIO
 		if ( ( !edge_rise_fall_Flag  && !tim_count_reset_Flag ) && count_edge >= 2 ) // F and F  and 2,3 ...
 		{
-			actual_tick = HAL_GetTick();
+			actual_tick = HAL_GetTick(); // __HAL_TIM_GET_COUNTER(&htim2); HAL_GetTick();
 			if ( tick_last_timer != 0 ) {
 				timer_interval = actual_tick - tick_last_timer;
 				// --When is time it set flag to do read from GPIO without waiting to interrupt
 				if (   ( timer_interval > tick_count_prim ) && ( timer_interval <=  tick_count_prim_and_half  )   ) //
 				{
-					tick_current_timer = HAL_GetTick();
+					tick_current_timer = HAL_GetTick(); // __HAL_TIM_GET_COUNTER(&htim2); HAL_GetTick();
 					tim_count_reset_Flag = true;
 				}
 			}
@@ -417,12 +415,12 @@ void manchester_receive_data_array( volatile uint16_t recived_mess[], uint8_t* m
 		{
 
 			//__HAL_TIM_GET_COUNTER(&htim2);
-			time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;
+			time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set; //(Time_delay_Count_not_set*10)
 
 			//current_time_tick = edge_rise_fall_Flag ? tick_count_current_edge : tick_current_timer;
 			last_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;
 
-			if ( ( HAL_GetTick() - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim1)
+			if ( ( HAL_GetTick() - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim2)
 			{
 				//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_count_current_edge), time_delay);
 				//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -601,7 +599,10 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 	register volatile uint8_t count_bit= 0;
 
 	message = 0;
+	HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); //
 
+	HAL_TIM_Base_Start(&htim2);
+	HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
 
 	while (1)
 	{
@@ -616,7 +617,7 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 
 			//HAL_Delay( time_delay);
 
-			if ( ( __HAL_TIM_GET_COUNTER(&htim2) - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim2)
+			if ( ( HAL_GetTick() - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim2)
 			{
 				//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_count_current_edge), time_delay);
 				//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -642,9 +643,9 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 			if ( count_edge == 2  )
 			{
 				tick_count_prim = interval_btw_tick;
-				__HAL_TIM_SET_AUTORELOAD(&htim1, tick_count_prim );
+				__HAL_TIM_SET_AUTORELOAD(&htim2, tick_count_prim );
 				//__HAL_TIM_SET_COUNTER(&htim1, tick_count_prim );
-				__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, tick_count_prim);
+				__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim);
 				tick_count_prim_half =   (uint32_t) (tick_count_prim/2 );
 				//HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1);
 				//tick_count_prim_and_half = (uint32_t) tick_count_prim*1.5f;
@@ -690,7 +691,7 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 
 	  		  //return; //end_word
 		if ( end_word ) { //messg_count == MAX_mess_recived  //count == 31 ||
-			HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);
+			HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
 			HAL_NVIC_DisableIRQ(EXTI0_IRQn);
 			//HAL_TIM_Base_Stop_IT(&htim1);
 
@@ -700,6 +701,7 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t recived_me
 			break;
 		}
 	}
+	HAL_TIM_Base_Stop(&htim2);
 	return;
 }
 
@@ -759,8 +761,8 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 
     	 if (!edge_rise_fall_Flag)
     	{
-        	tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2);//HAL_GetTick(); //__HAL_TIM_GET_COUNTER(&htim2)
-        	//__HAL_TIM_SET_COUNTER(&htim2, 0);
+        	tick_current_timer = HAL_GetTick();//HAL_GetTick(); //__HAL_TIM_GET_COUNTER(&htim2)
+        	__HAL_TIM_SET_COUNTER(&htim2, 0);
         	//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "F OC, %ld\r\n", __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1) );
         	//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
         	tim_count_reset_Flag = true;
@@ -768,6 +770,21 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
     	}
 
     }
+    if (htim->Instance == TIM2)
+        {
+        	__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);
+
+        	 if (!edge_rise_fall_Flag)
+        	{
+            	tick_current_timer = HAL_GetTick();//HAL_GetTick(); //__HAL_TIM_GET_COUNTER(&htim2)
+            	__HAL_TIM_SET_COUNTER(&htim2, 0);
+            	//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "F OC, %ld\r\n", __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1) );
+            	//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
+            	tim_count_reset_Flag = true;
+
+        	}
+
+        }
     // return;
 
 }
@@ -788,10 +805,11 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 
 
 		//tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2);
-		//__HAL_TIM_SET_COUNTER(&htim2, 0);
+		__HAL_TIM_SET_COUNTER(&htim2, 0);
 		//tick_count_current_edge = HAL_GetTick();
-		tick_count_current_edge = timer_counter_enable ? __HAL_TIM_GET_COUNTER(&htim2) : HAL_GetTick();
+		tick_count_current_edge = HAL_GetTick();// timer_counter_enable ? __HAL_TIM_GET_COUNTER(&htim2) : HAL_GetTick();
 		/*if ( timer_counter_enable ) {
+		 *
 
 		}
 		else {
@@ -818,7 +836,8 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
 		//__HAL_TIM_DISABLE_IT(&htim1, TIM1_CC_IRQn); // disable intrupt TIM2
 		 __HAL_GPIO_EXTI_CLEAR_FLAG(Manchester_In_Pin);
 
-		 tick_count_current_edge = timer_counter_enable ? __HAL_TIM_GET_COUNTER(&htim2) : HAL_GetTick();
+		 __HAL_TIM_SET_COUNTER(&htim2, 0);
+		 tick_count_current_edge = HAL_GetTick(); /// timer_counter_enable ? __HAL_TIM_GET_COUNTER(&htim2) : HAL_GetTick();
 
 		 edge_rise_fall_Flag = true;
 		 count_edge++;
@@ -876,7 +895,6 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   MX_MEMORYMAP_Init();
-  MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
@@ -884,7 +902,7 @@ int main(void)
 
   message = 0;
 
-  _Bool const send_data_mode_enable = false;
+  _Bool const send_data_mode_enable = false, timer_counter_enable = false;
 
   volatile uint16_t recived_mess_local[MAX_mess_recived]={0};
   volatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0};
@@ -903,8 +921,8 @@ int main(void)
 
 
 
- // if (false) {
-      unsigned char sprava[] = "Zdar"; // STM
+
+      unsigned char sprava[] = "Hello!"; // STM
 
       if (send_data_mode_enable) // ---------------------- send
       {
@@ -923,9 +941,7 @@ int main(void)
     	  edge_rise_fall_Flag = false;
     	  count_edge = 0;
 
-    	  HAL_NVIC_SetPriority(TIM1_CC_IRQn, 1, 1); //
-		  HAL_TIM_Base_Start(&htim2); // for couter
-		  HAL_TIM_Base_Start(&htim1);
+    	  HAL_InitTick(SystemCoreClock);
 
     	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "Receiv m!\r\n");
     	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -934,21 +950,20 @@ int main(void)
 
     	  if ( timer_counter_enable ) {
 
-    		  HAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1); // for compare with value in channe
+    		   // for compare with value in channe
 
-    		  //__HAL_TIM_DISABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_1);
-    		  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); // for chanel of timer
 
     		  manchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local);
     		  // Time stpo
     		  //HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1);
-    		  HAL_TIM_Base_Stop(&htim2);
-    		  HAL_TIM_Base_Stop(&htim1);
+    		 // HAL_TIM_Base_Stop(&htim2);
+
     	  }
     	  else {
-    		  HAL_InitTick(SystemCoreClock);
+    		  //  HAL_InitTick(SystemCoreClock);
 
     		  manchester_receive_data_array(recived_mess_local, &messg_count_local);
+
     	  }
 
 
@@ -960,7 +975,6 @@ int main(void)
 
       }
 
-    //}
 
 
   while (1)
@@ -1185,90 +1199,6 @@ static void MX_MEMORYMAP_Init(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-  	  // (160 000 000 -1)/ 10 000 = 15999,999 =~ 16000 divider
-  	  // 1/10 000 = 0,0001 s *(999 +1) = 0,1 s
-  	  	  // Prescaler: 160 000 000 / 16000 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
-    	  // Period: 0,0001 * (4999 +1) = 0,5 s = 500 ms end of period
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 15999;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
-  sConfigOC.Pulse = 65535;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.BreakAFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
-  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
-  sBreakDeadTimeConfig.Break2Filter = 0;
-  sBreakDeadTimeConfig.Break2AFMode = TIM_BREAK_AFMODE_INPUT;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -1282,6 +1212,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
   	  // Prescaler: 160 000 000-1 / 16000-1 = 10 000 ---> 1/10 000 = 0,0001 secunds = 0,1 ms
@@ -1289,9 +1220,9 @@ static void MX_TIM2_Init(void)
   	  // 599 999 +1 ~= 60 s
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 15999;
+  htim2.Init.Prescaler = 159999;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4.0E9;
+  htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -1303,9 +1234,21 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
+  sConfigOC.Pulse = 65535;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
