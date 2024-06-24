@@ -1,0 +1,92 @@
+@startuml
+title Manchester decode data array processing
+' comment
+start
+' For write via VScode must by filename.puml
+' This set can read 0s signal or 1s signal, but it not read data
+' This set read values after Falling or Rising, but not between 
+
+partition "int **main**(void)" {
+    :volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
+
+if ( send_data_mode_enable ) then (yes)
+    :send;
+else (no)
+	:HAL_NVIC_EnableIRQ(EXTI0_IRQn);;
+    if ( timer_counter_enable ) then (yes)
+		:HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \nmanchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local); \nHAL_TIM_Base_Stop_IT(&htim2);;
+		' :receive with timer in compare mode;
+	else (no)
+		:HAL_InitTick(SystemCoreClock); \nmanchester_receive_data_array(recived_mess_local, &messg_count_local);;
+        ' :receive with system timer;
+    endif
+    note left: timer_counter_enable == false
+    :manchester_decode_data_array(recived_mess_local, recived_decod_mess_local, &messg_count_local);;
+endif
+note left: send_data_mode_enable == false
+
+ 
+}
+
+
+
+' ----------------- end of  main() ------------------
+partition "void **manchester_decode_data_array**( volatile uint16_t recived_mess[], volatile uint8_t recived_decod_mess[], uint8_t* messg_count )" {
+	if (MSB_Frst_E) then (yes)
+	    :mask_8 = 0x80; \nmask_16= 0x8000;;
+    else
+	    :mask_8 = 0x01; \nmask_16= 0x001;;
+    endif
+    note left :MSB_Frst_E = true
+    
+    while ( massg_count >0 ) is (1,2,3,..)
+		:massg_count--; \nmanchester_mass = recived_mass[massg_count]; \nmassage= 0;;
+		
+		if (MSB_Frst_E) then (yes)
+			:mask_16 = 0x8000;;
+		else (no)
+			:mask_16 = 0x01;;
+		endif
+
+		' for loop
+		while ( for( int bite_cnt = 0; bite_cnt < 8; bite_cnt++ )) is (1,2,3,..)
+			if (manchester_IEEE) then (yes)
+			' 0b01 decode -> 1
+			
+				if ( !(manchester_mass & mask_16 ) \n&& (manchester_mass & (mask_16>>1) ) ) then (0b01 decode -> 1)
+					:massage |= 1;;
+				elseif ( !(manchester_mass & (mask_16>>1) ) ) then (0b10 -> 0)
+					:massage |= 0;;
+				endif
+
+			else
+			' 0b10 decode -> 1
+				if ( (manchester_mass & mask_16 ) \n&& !(manchester_mass & (mask_16>>1) ) ) then (0b10 decode -> 1)
+					:massage |= 1;;
+				elseif ( (manchester_mass & (mask_16>>1) ) ) then (0b01 ->0)
+					:massage |= 0;;
+				endif
+
+			endif
+		note left :manchester_IEEE == true
+
+			if (MSB_Frst_E) then (yes)
+				:mask_16 >>= 2;;
+			else (no)
+				:mask_16 <<= 2;;
+			endif
+
+			if ( bite_cnt < 7 ) then (6,5,4..)
+				:massage <<= 1;;
+			endif
+
+		endwhile (8)
+
+		:recived_decod_mass[massg_count] = massage;;
+	endwhile
+
+':code;
+}
+stop
+
+@enduml

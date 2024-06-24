@@ -71,9 +71,9 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USER_BUTTON_Pin GPIO_PIN_13
 #define USER_BUTTON_GPIO_Port GPIOC
-#define Manchaster_In_Pin GPIO_PIN_0
-#define Manchaster_In_GPIO_Port GPIOF
-#define Manchaster_In_EXTI_IRQn EXTI0_IRQn
+#define Manchester_In_Pin GPIO_PIN_0
+#define Manchester_In_GPIO_Port GPIOF
+#define Manchester_In_EXTI_IRQn EXTI0_IRQn
 #define Manchaster_Out_Pin GPIO_PIN_1
 #define Manchaster_Out_GPIO_Port GPIOF
 #define VBUS_SENSE_Pin GPIO_PIN_2
@@ -96,8 +96,8 @@ void Error_Handler(void);
 #define USB_OTG_FS_DP_GPIO_Port GPIOA
 #define UCPD1_CC1_Pin GPIO_PIN_15
 #define UCPD1_CC1_GPIO_Port GPIOA
-#define Menches_Out_Pin GPIO_PIN_0
-#define Menches_Out_GPIO_Port GPIOD
+#define Manchester_Out_Pin GPIO_PIN_0
+#define Manchester_Out_GPIO_Port GPIOD
 #define UCPD_DBn_Pin GPIO_PIN_5
 #define UCPD_DBn_GPIO_Port GPIOB
 #define LED_BLUE_Pin GPIO_PIN_7

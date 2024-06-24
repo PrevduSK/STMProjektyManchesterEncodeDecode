@@ -1,0 +1,165 @@
+@startuml
+title Manchester read with intreup and system timer processing
+' comment
+start
+' For write via VScode must by filename.puml
+' This set can read 0s signal or 1s signal, but it not read data
+' This set read values after Falling or Rising, but not between 
+
+partition "int **main**(void)" {
+
+:volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
+
+if ( send_data_mode_enable ) then (yes)
+    :send;
+else (no)
+	:HAL_NVIC_EnableIRQ(EXTI0_IRQn);;
+    if ( timer_counter_enable ) then (yes)
+		:HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \nmanchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local); \nHAL_TIM_Base_Stop_IT(&htim2);;
+		' :receive with timer in compare mode;
+	else (no)
+		:HAL_InitTick(SystemCoreClock); \nmanchester_receive_data_array(recived_mess_local, &messg_count_local);;
+        ' :receive with system timer;
+    endif
+    note left: timer_counter_enable == false
+    :manchester_decode_data_array(recived_mess_local, recived_decod_mess_local, &messg_count_local);;
+endif
+note left: send_data_mode_enable == false
+
+}
+stop
+
+'fork
+split
+partition "void **manchester_receive_data_array**( volatile uint16_t recived_mess[], uint8_t* messg_count ) " {
+while (  **While** endless loop ) is (yes)
+
+if ( ( !edge_rise_fall_Flag  && !tim_count_reset_Flag ) && count_edge >= 2 ) then (yes)
+floating note left: &&  AND
+    :actual_tick = HAL_GetTick();;
+    
+	if ( tick_last_timer != 0 ) then (yes)
+		:timer_interval = actual_tick - tick_last_timer;;
+
+		if (  ( timer_interval > tick_count_prim ) && ( timer_interval <=  tick_count_prim_and_half  )   ) then (yes)
+			:tick_current_timer = HAL_GetTick(); \ntim_count_reset_Flag = true;;
+		endif
+	endif
+endif
+
+
+	'  ---------------------------- edge_Flag rection ------------------------- 
+if ( edge_rise_fall_Flag || tim_count_reset_Flag )  then (yes) 
+floating note left: ||  OR		
+	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set; \nlast_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;;
+
+
+   		floating note left:   Time_delay_Count_not_set == 40U ~ 40ms
+	if ( (HAL_GetTick() - last_time_tick) > time_delay ) then (yes)
+		
+        if ( edge_rise_fall_Flag ) then (yes)
+            :interval_btw_tick = tick_cunt_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge; \ntick_last_timer = tick_count_current_edge;;
+        else (no) 
+            :tick_count_last_edge = tick_current_timer;\ntick_last_timer = tick_current_timer;;
+        endif
+        :bit_read_enab = true; \nedge_rise_fall_Flag = false; \ntim_count_reset_Flag = false;;
+	endif
+	  
+
+	if ( count_edge == 2 ) then (yes)
+		:tick_count_prim = interval_btw_tick; \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 ); \ntick_count_prim_and_half = (uint32_t) tick_count_prim*1.5f;;
+	endif
+	
+	if ( bit_read_enab ) then (yes)
+				
+	  	:bit_read_enab = false;;	
+		if ( HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_RESET) then (yes)
+		note right: GPIO_PIN_RESET == 0
+					'  :manchester_mass |= 0; \nmanchester_mass <<= 1; \ncount_bit++;;
+				 		
+		      		' if(HAL_GPIO_ReadPin(Manchaster_In_GPIO_Port, Manchaster_In_Pin) == GPIO_PIN_SET) then (yes)
+		else (no)
+			
+					' \nmanchester_mass <<= 1; \ncount_bit++; 
+			:manchester_mass |= 1;;
+		   
+		endif
+			
+		:count_bit++;;
+		if(count_bit >= 16) then (16,17,.. >= 16)
+					' :HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);   HAL_NVIC_DisableIRQ(EXTI0_IRQn); \n
+			:recived_mass[massg_count] = manchester_mass;;
+			if (massg_count < MAX_mass_recived) then (yes)
+				note right: MAX_mass_recived == 30
+				:massg_count++;;
+			else (no)
+				:end_word = true;;
+			endif
+
+			if ( (manchester_mass == 0xAAAA || manchester_mass == 0x0)  \n || (manchester_mass == 0x5555 || manchester_mass == 0xFFFF) ) then (yes)
+				:end_word = true;;
+			endif
+					' // HAL_UART_Transmit(&huart1, (uint8_t *) "\r\n", sizeof("\r\n"), 1);
+			:count_bit = 0; \nmanchester_mass = 0;;
+					' //manchester_mass = 0;
+		else ( 0,1, ..,15)
+			:manchester_mass <<= 1;;
+		endif
+	endif
+
+	  endif
+	if ( end_word ) then (yes)
+		  ' //HAL_SuspendTick();
+		:HAL_NVIC_DisableIRQ(EXTI0_IRQn); \nbreak;;
+		:**While** end;
+		break	
+		' detach
+		' stop
+	endif
+
+
+  
+endwhile
+'-[hidden]->
+ ' detach
+}
+
+
+' -------------------------------- hedlers for interupt -----------------------------
+' ---------------------- Callback for TIM_OC---------------------------
+'fork again
+ '  partition "void **HAL_TIM_OC_DelayElapsedCallback**(TIM_HandleTypeDef * htim)"{
+	' start
+'	if (htim->Instance == TIM2) then (yes)
+ '   		:__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1); \ntim_count_reset_Flag = true;;
+'	endif
+'	end
+ '  }
+
+' --------------------------------Callback for GPIO_EXTI------------------------------
+'fork again
+split again
+   partition "void **HAL_GPIO_EXTI_Rising_Callback**(uint16_t GPIO_Pin)"{
+	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
+	endif
+	end
+   }
+
+
+'fork again
+split again
+   partition "void **HAL_GPIO_EXTI_Falling_Callback**(uint16_t GPIO_Pin)"{
+	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
+	endif
+	end
+   }
+'end fork
+end split
+' end merge
+end
+
+
+
+@enduml
