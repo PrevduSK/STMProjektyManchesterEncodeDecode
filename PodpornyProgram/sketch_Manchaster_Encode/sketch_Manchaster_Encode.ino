@@ -62,7 +62,7 @@ void setup() {
     delay(1200);
     Serial.println("Send m!"); //Posielanie!
     delay(400);
-    unsigned char odkaz[] ="Pre"; //  Prevdu
+    unsigned char odkaz[] ="Prevdu"; //  Prevdu
     manchester_encode_and_send_char_array( odkaz, sizeof(odkaz));
     //manchester_encode_and_send_char( (uint8_t) 'd', true );
     //manchester_encode_and_send_char(0xff, true);// 0xff

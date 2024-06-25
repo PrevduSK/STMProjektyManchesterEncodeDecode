@@ -6,32 +6,35 @@ start
 ' This set can read 0s signal or 1s signal, but it not read data
 ' This set read values after Falling or Rising, but not between 
 
-partition "int **main**(void)" {
+partition "void **manchester_send_and_receive**( _Bool send_data_mode_enable, _Bool timer_counter_enable, volatile uint16_t received_mess[], volatile uint8_t received_decod_mess[], uint8_t * received_messg_count, unsigned char send_mess[], uint8_t send_messg_count )" {
 
-:volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
+':volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
 
 if ( send_data_mode_enable ) then (yes)
     :send;
 else (no)
-	:HAL_NVIC_EnableIRQ(EXTI0_IRQn);;
+	:HAL_NVIC_EnableIRQ(EXTI0_IRQn); \nedge_rise_fall_Flag = false; \ncount_edge = 0; \nHAL_InitTick(SystemCoreClock);;
     if ( timer_counter_enable ) then (yes)
-		:HAL_NVIC_SetPriority(TIM1_CC_IRQn, 1, 1); \nHAL_TIM_Base_Start(&htim2); \nHAL_TIM_OC_Start_IT(&htim1, TIM_CHANNEL_1); \nmanchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local); \nHAL_TIM_Base_Stop(&htim2); \nHAL_TIM_Base_Stop(&htim1);;
+		':HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \n     \nHAL_TIM_Base_Stop_IT(&htim2);;
+		:manchester_receive_data_array_via_timer_count(received_mess, received_messg_count);; 
 		' :receive with timer in compare mode;
 	else (no)
-		:HAL_InitTick(SystemCoreClock); \nmanchester_receive_data_array(recived_mess_local, &messg_count_local);;
+		:manchester_receive_data_array(received_mess, received_messg_count);;
         ' :receive with system timer;
     endif
-    note left: timer_counter_enable == true
-    :manchester_decode_data_array(recived_mess_local, recived_decod_mess_local, &messg_count_local);;
+    note left: timer_counter_enable == false
+    :manchester_decode_data_array(received_mess, received_decod_mess, *received_messg_count);;
 endif
 note left: send_data_mode_enable == false
 
 }
-stop
+end
 
 'fork
 split
 partition "void **manchester_receive_data_array_via_timer_count**( volatile uint16_t recived_mess[], uint8_t* messg_count ) " {
+	:message = 0; \nHAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \n\nHAL_TIM_Base_Start(&htim2); 	\nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);;
+
 while (  **While** endless loop ) is (yes)
 
 
@@ -39,25 +42,23 @@ while (  **While** endless loop ) is (yes)
 	'  ---------------------------- edge_Flag rection ------------------------- 
 if ( edge_rise_fall_Flag || tim_count_reset_Flag )  then (yes) 
 floating note left: ||  OR		
-	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : (Time_delay_Count_not_set *10 000);; 
-	'\nlast_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;;
+	:time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set; \nlast_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;;
 
 
    		floating note left:   Time_delay_Count_not_set == 40U ~ 40ms
-	if ( ( __HAL_TIM_GET_COUNTER(&htim2) - tick_current_timer) > time_delay ) then (yes)
+	if ( ( HAL_GetTick() - tick_current_timer) > time_delay ) then (yes)
 		
         if ( edge_rise_fall_Flag ) then (yes)
-            :interval_btw_tick = tick_current_timer;; 
-			'- tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge; \ntick_last_timer = tick_count_current_edge;;
-       ' else (no) 
-        '    :tick_count_last_edge = tick_current_timer;\ntick_last_timer = tick_current_timer;;
+            :interval_btw_tick = tick_count_current_edge - tick_count_last_edge; \ntick_count_last_edge = tick_cunt_current_edge; \ntick_last_timer = tick_count_current_edge;;
+       	else (no) 
+            :tick_count_last_edge = tick_current_timer; \ntick_last_timer = tick_current_timer;;
         endif
         :bit_read_enab = true; \nedge_rise_fall_Flag = false; \ntim_count_reset_Flag = false;;
 	endif
 	  
 
 	if ( count_edge == 2 ) then (yes)
-		:tick_count_prim = interval_btw_tick; \n__HAL_TIM_SET_AUTORELOAD(&htim1, tick_count_prim ); \n__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, tick_count_prim); \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 );; 
+		:tick_count_prim = interval_btw_tick; \n__HAL_TIM_SET_AUTORELOAD(&htim2, tick_count_prim ); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, tick_count_prim); \ntick_count_prim_half =   (uint32_t) (tick_count_prim/2 );; 
 		'\ntick_count_prim_and_half = (uint32_t) tick_count_prim*1.5f;;
 	endif
 	
@@ -79,10 +80,10 @@ floating note left: ||  OR
 		:count_bit++;;
 		if(count_bit >= 16) then (16,17,.. >= 16)
 					' :HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);   HAL_NVIC_DisableIRQ(EXTI0_IRQn); \n
-			:recived_mass[massg_count] = manchester_mass;;
-			if (massg_count < MAX_mass_recived) then (yes)
+			:recived_mass[*massg_count] = manchester_mass;;
+			if (*massg_count < MAX_mass_recived) then (yes)
 				note right: MAX_mass_recived == 30
-				:massg_count++;;
+				:(*massg_count)++;;
 			else (no)
 				:end_word = true;;
 			endif
@@ -102,21 +103,21 @@ floating note left: ||  OR
 	  endif
 	if ( end_word ) then (yes)
 		  ' //HAL_SuspendTick();
-		:HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1); \nHAL_NVIC_DisableIRQ(EXTI0_IRQn); \nHAL_TIM_Base_Stop_IT(&htim1); \nbreak;;
+		:HAL_TIM_OC_Stop_IT(&htim2, TIM_CHANNEL_1); \nHAL_NVIC_DisableIRQ(EXTI0_IRQn); \nbreak;;
 		:**While** end;
 		break	
 		' detach
 		' stop
 	endif
-
+	
 
   
 endwhile
 '-[hidden]->
  ' detach
- end
+ :HAL_TIM_Base_Stop(&htim2);;
 }
-
+end
 
 ' -------------------------------- hedlers for interupt -----------------------------
 ' ---------------------- Callback for TIM_OC---------------------------
@@ -127,7 +128,7 @@ split again
 	if (htim->Instance == TIM2) then (yes)
    		:__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC1);;
         if (!edge_rise_fall_Flag) then (yes)
-            :tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntim_count_reset_Flag = true;;
+            :tick_current_timer = HAL_GetTick(); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntim_count_reset_Flag = true;;
         endif
 	endif
 	end
@@ -138,12 +139,7 @@ split again
 split again
    partition "void **HAL_GPIO_EXTI_Rising_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
-		:__HAL_TIM_DISABLE_IT(&htim1, TIM1_CC_IRQn); \n__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
-		if ( timer_counter_enable ) then (yes)
-			:tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2); \n__HAL_TIM_SET_COUNTER(&htim2, 0);;
-		else
-			:tick_count_current_edge = HAL_GetTick();;
-		endif
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntick_cunt_current_edge = HAL_GetTick(); \n\nedge_rise_fall_Flag = true; \ncount_edge++;
 	endif
 	end
    }
@@ -153,15 +149,10 @@ split again
 split again
    partition "void **HAL_GPIO_EXTI_Falling_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
-		:__HAL_TIM_DISABLE_IT(&htim1, TIM1_CC_IRQn); \n__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
-		if ( timer_counter_enable ) then (yes)
-			:tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2); \n__HAL_TIM_SET_COUNTER(&htim2, 0);;
-		else
-			:tick_count_current_edge = HAL_GetTick();;
-		endif
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntick_cunt_current_edge = HAL_GetTick(); \n\nedge_rise_fall_Flag = true; \ncount_edge++;
 	endif
 	end
-    }  
+   }
 'end fork
 end split
 ' end merge

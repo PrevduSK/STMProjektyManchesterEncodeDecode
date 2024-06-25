@@ -1,0 +1,105 @@
+@startuml
+title Manchester write with system timer processing
+' comment
+
+start
+partition "void **manchester_send_and_receive**( _Bool send_data_mode_enable, _Bool timer_counter_enable, volatile uint16_t received_mess[], volatile uint8_t received_decod_mess[], uint8_t * received_messg_count, unsigned char send_mess[], uint8_t send_messg_count )" {
+
+':volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
+
+if ( send_data_mode_enable ) then (yes)
+    ':send;
+    :HAL_Delay(4000); \nmanchester_encode_and_send_char_array(send_mess, send_messg_count);;
+else (no)
+	:HAL_NVIC_EnableIRQ(EXTI0_IRQn); \nedge_rise_fall_Flag = false; \ncount_edge = 0; \nHAL_InitTick(SystemCoreClock);;
+    if ( timer_counter_enable ) then (yes)
+		':HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \n     \nHAL_TIM_Base_Stop_IT(&htim2);;
+		':manchester_receive_data_array_via_timer_count(received_mess, received_messg_count);; 
+		 :receive with timer in compare mode;
+	else (no)
+		':manchester_receive_data_array(received_mess, received_messg_count);;
+        :receive with system timer;
+    endif
+    note left: timer_counter_enable == false
+   ' :manchester_decode_data_array(received_mess, received_decod_mess, *received_messg_count);;
+endif
+note left: send_data_mode_enable == true
+
+}
+end
+
+
+partition "void **manchester_encode_and_send_char_array**(unsigned char message[], uint8_t length)" {
+start
+    
+    :volatile uint16_t mess_buf[length];;
+    while ( for (uint8_t i = 0; i < length; i++) ) is (yes)
+        :mess_buf[i] = manchester_encode_char( (uint8_t) message[i] );;
+    endwhile
+
+    while ( for (uint8_t i = 0; i < length; i++) ) is (yes)
+        :manchester_send_encoded_data( mess_buf[i] );;
+    endwhile
+
+        :manchester_encode_and_send_char(0);;
+end
+}
+
+
+
+partition "uint16_t **manchester_encode_char**(uint8_t message)" {
+start
+    ':_Bool print_hex = false, print_dec_ofMess = false;
+    :uint8_t count = 0, comp_bit = 0; \nuint16_t manchester_mass = 0; \nbool clk = 0;;
+    if (MSB_Frst_E) then (yes)
+        :mask_8 = 0x80;;
+    else (no) 
+        :mask_8 = 0x01;;
+    endif
+note left: MSB_Frst_E = true 
+
+    while (true) is (yes)
+        :clk = !clk; \ncomp_bit = (message & mask_8) ? 1 : 0;;
+        if (manchester_IEEE) then (yes)
+            if ( comp_bit ^ (clk & 0x01) ) then (yes)
+                :manchester_mass |= 1;;
+            else
+                :manchester_mass |= 0;;
+            endif
+        else
+            if ( !(comp_bit ^ (clk & 0x01)) ) then (yes)
+                :manchester_mass |= 1;;
+            else
+                :manchester_mass |= 0;;
+            endif
+        endif
+        note left: manchester_IEEE == treu
+        if (!clk) then (yes)
+            if (MSB_Frst_E) then (yes)
+                :mask_8 >>= 1;;        
+            else 
+                :mask_8 <<= 1;;
+            endif
+        endif
+
+        if (count == 15) then (15)
+            if(print_hex) then (yes)
+                :Print via UART;
+            endif
+        note right: print_hex == false
+            if(print_dec_ofMess) then (yes)
+                :Print via UART;
+            endif
+        note right: print_dec_ofMess == false
+            :return manchester_mass;;
+            break
+        endif
+
+        :count++; \nmanchester_mass <<= 1;;
+    endwhile
+
+end
+}
+
+
+@enduml

@@ -6,28 +6,29 @@ start
 ' This set can read 0s signal or 1s signal, but it not read data
 ' This set read values after Falling or Rising, but not between 
 
-partition "int **main**(void)" {
+partition "void **manchester_send_and_receive**( _Bool send_data_mode_enable, _Bool timer_counter_enable, volatile uint16_t received_mess[], volatile uint8_t received_decod_mess[], uint8_t * received_messg_count, unsigned char send_mess[], uint8_t send_messg_count )" {
 
-:volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
+':volatile uint16_t recived_mess_local[MAX_mess_recived]={0}; \nvolatile uint8_t recived_decod_mess_local[MAX_mess_recived]={0}; \nuint8_t messg_count_local= 0u;;
 
 if ( send_data_mode_enable ) then (yes)
     :send;
 else (no)
-	:HAL_NVIC_EnableIRQ(EXTI0_IRQn);;
+	:HAL_NVIC_EnableIRQ(EXTI0_IRQn); \nedge_rise_fall_Flag = false; \ncount_edge = 0; \nHAL_InitTick(SystemCoreClock);;
     if ( timer_counter_enable ) then (yes)
-		:HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \nmanchester_receive_data_array_via_timer_count(recived_mess_local, &messg_count_local); \nHAL_TIM_Base_Stop_IT(&htim2);;
+		':HAL_NVIC_SetPriority(TIM2_IRQn, 1, 1); \nHAL_TIM_Base_Start_IT(&htim2); \nHAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1); \n__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 299999); \n     \nHAL_TIM_Base_Stop_IT(&htim2);;
+		:manchester_receive_data_array_via_timer_count(received_mess, received_messg_count);; 
 		' :receive with timer in compare mode;
 	else (no)
-		:HAL_InitTick(SystemCoreClock); \nmanchester_receive_data_array(recived_mess_local, &messg_count_local);;
+		:manchester_receive_data_array(received_mess, received_messg_count);;
         ' :receive with system timer;
     endif
     note left: timer_counter_enable == false
-    :manchester_decode_data_array(recived_mess_local, recived_decod_mess_local, &messg_count_local);;
+    :manchester_decode_data_array(received_mess, received_decod_mess, *received_messg_count);;
 endif
 note left: send_data_mode_enable == false
 
 }
-stop
+end
 
 'fork
 split
@@ -88,10 +89,10 @@ floating note left: ||  OR
 		:count_bit++;;
 		if(count_bit >= 16) then (16,17,.. >= 16)
 					' :HAL_TIM_OC_Stop_IT(&htim1, TIM_CHANNEL_1);   HAL_NVIC_DisableIRQ(EXTI0_IRQn); \n
-			:recived_mass[massg_count] = manchester_mass;;
-			if (massg_count < MAX_mass_recived) then (yes)
+			:recived_mass[*massg_count] = manchester_mass;;
+			if (*massg_count < MAX_mass_recived) then (yes)
 				note right: MAX_mass_recived == 30
-				:massg_count++;;
+				:(*massg_count)++;;
 			else (no)
 				:end_word = true;;
 			endif
@@ -141,7 +142,7 @@ endwhile
 split again
    partition "void **HAL_GPIO_EXTI_Rising_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
-		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntick_cunt_current_edge = HAL_GetTick(); \n\nedge_rise_fall_Flag = true; \ncount_edge++;
 	endif
 	end
    }
@@ -151,7 +152,7 @@ split again
 split again
    partition "void **HAL_GPIO_EXTI_Falling_Callback**(uint16_t GPIO_Pin)"{
 	if (GPIO_Pin == Manchaster_In_Pin) then (yes)
-		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \ntick_cunt_current_edge = HAL_GetTick(); \nedge_rise_fall_Flag = true; \ncount_edge++;
+		:__HAL_GPIO_EXTI_CLEAR_FLAG(Manchaster_In_Pin); \n__HAL_TIM_SET_COUNTER(&htim2, 0); \ntick_cunt_current_edge = HAL_GetTick(); \n\nedge_rise_fall_Flag = true; \ncount_edge++;
 	endif
 	end
    }
@@ -159,7 +160,6 @@ split again
 end split
 ' end merge
 end
-
 
 
 @enduml

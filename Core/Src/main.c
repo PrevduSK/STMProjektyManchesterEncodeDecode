@@ -616,17 +616,16 @@ void manchester_receive_data_array_via_timer_count( volatile uint16_t received_m
 	while (1)
 	{
 		// --Non blocking wait to time interval for read from GPIO
-		if ( edge_rise_fall_Flag || tim_count_reset_Flag  )  //  == true OR  == true  //|| tim_count_reset_Flag
+		if ( edge_rise_fall_Flag || tim_count_reset_Flag  )  //  == true OR  == true  /
 		{
 
-			//__HAL_TIM_GET_COUNTER(&htim2);
-			time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set; //(Time_delay_Count_not_set*10000)
+			time_delay = (tick_count_prim != 0) ?  tick_count_prim_half : Time_delay_Count_not_set;
 
 			last_time_tick = edge_rise_fall_Flag ? tick_count_last_edge :  tick_last_timer;
 
 			//HAL_Delay( time_delay);
 
-			if ( ( HAL_GetTick() - last_time_tick) > time_delay )  //HAL_GetTick()  __HAL_TIM_GET_COUNTER(&htim2)
+			if ( ( HAL_GetTick() - last_time_tick) > time_delay )  // __HAL_TIM_GET_COUNTER(&htim2)
 			{
 				//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "tim %ld, del %ld !=\r\n", (HAL_GetTick() - tick_count_current_edge), time_delay);
 				//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -785,7 +784,7 @@ void HAL_TIM_OC_DelayElapsedCallback (TIM_HandleTypeDef * htim)
 
         	 if (!edge_rise_fall_Flag)
         	{
-            	tick_current_timer = HAL_GetTick();//HAL_GetTick(); //__HAL_TIM_GET_COUNTER(&htim2)
+            	tick_current_timer = HAL_GetTick();// __HAL_TIM_GET_COUNTER(&htim2)
             	__HAL_TIM_SET_COUNTER(&htim2, 0);
             	//snprintf(uart_mess_buf, sizeof(uart_mess_buf), "F OC, %ld\r\n", __HAL_TIM_GET_COMPARE(&htim2, TIM_CHANNEL_1) );
             	//HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -809,25 +808,17 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == Manchester_In_Pin)
 	{
-		//__HAL_TIM_DISABLE_IT(&htim1, TIM1_CC_IRQn); // disable intrupt TIM2
-		__HAL_GPIO_EXTI_CLEAR_FLAG(Manchester_In_Pin);
 
+		__HAL_GPIO_EXTI_CLEAR_FLAG(Manchester_In_Pin);
 
 		//tick_current_timer = __HAL_TIM_GET_COUNTER(&htim2);
 		__HAL_TIM_SET_COUNTER(&htim2, 0);
 		//tick_count_current_edge = HAL_GetTick();
-		tick_count_current_edge = HAL_GetTick();// timer_counter_enable ? __HAL_TIM_GET_COUNTER(&htim2) : HAL_GetTick();
-		/*if ( timer_counter_enable ) {
-		 *
-
-		}
-		else {
-
-		} */
+		tick_count_current_edge = HAL_GetTick();// __HAL_TIM_GET_COUNTER(&htim2)
 
 		 edge_rise_fall_Flag = true;
 		 count_edge++;
-		// __HAL_TIM_ENABLE_IT(&htim2, TIM2_IRQn);
+
 	}
 }
 
@@ -932,7 +923,7 @@ void manchester_send_and_receive( _Bool send_data_mode_enable, _Bool timer_count
 
 
 		clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
-		snprintf(uart_mess_buf, sizeof(uart_mess_buf), "mess_count: %d \r\n", received_messg_count);
+		snprintf(uart_mess_buf, sizeof(uart_mess_buf), "mess_count: %d \r\n", *received_messg_count);
 		HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 2);
 
 		manchester_decode_data_array(received_mess, received_decod_mess, *received_messg_count);
@@ -943,7 +934,7 @@ void manchester_send_and_receive( _Bool send_data_mode_enable, _Bool timer_count
     snprintf(uart_mess_buf, sizeof(uart_mess_buf), "\r\n");
     HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
 
-    for ( uint8_t index = 0; index < received_messg_count; ++index) {
+    for ( uint8_t index = 0; index < *received_messg_count; ++index) {
 
   	  snprintf(uart_mess_buf, sizeof(uart_mess_buf), "%c", received_decod_mess[index]);
   	  HAL_UART_Transmit(&huart1, (uint8_t *) uart_mess_buf, sizeof(uart_mess_buf), 1);
@@ -978,7 +969,8 @@ HAL_StatusTypeDef my_UART_receive_char_array( unsigned char mess_buff[], uint8_t
     return HAL_OK;
 }
 
-
+/* Pokus funkcia ktora vypise moznosti
+ * */
 void terminal_send_recive(){
 
 	volatile uint16_t received_mess_local[MAX_mess_received]={0};
@@ -1143,7 +1135,7 @@ void terminal_send_recive(){
 
 	  }
 
-	  if (end_term) break;
+	 // if (end_term) break;
 	    //else {HAL_Delay(2000); }
 	  	//}
 
@@ -1202,9 +1194,9 @@ int main(void)
 
   uint8_t messg_count_local= 0u, sprava_count_local =0;
 
-  unsigned char sprava_local[MAX_mess_received] = {0}; // STM //unsigned char
+  unsigned char sprava_local[MAX_mess_received] = {"Hello!"}; // STM //unsigned char
+  sprava_count_local =7u;
 
-  HAL_StatusTypeDef read_state;
 
   /* USER CODE END 2 */
 
@@ -1217,15 +1209,7 @@ int main(void)
   clear_char_array_len(uart_mess_buf, UART_MESS_LEN);
 
 
-  //manchester_send_and_receive( false, false, received_mess_local, received_decod_mess_local, messg_count_local, sprava_local, sprava_count_local);
-  volatile uint8_t termin_mess =6, user_choice = 0;
-  volatile _Bool send_term_mess = true, end_term= false, read_term= false, read_info_not_send= true;
-
-
-
-  read_info_not_send = false;
-
-
+  manchester_send_and_receive( false, false, received_mess_local, received_decod_mess_local, &messg_count_local, sprava_local, sprava_count_local);
 
 
 
