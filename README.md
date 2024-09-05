@@ -5,7 +5,7 @@ Pre zariadenie STM32U575ZITxQ Nucleo Board 144
 
 <sub>**Poznámka:** otrovenie webu cez </sub>```Ctrl```+```clik```<sub>, pre otovenie na dalšom okne.</sub>
 
-[Program](./Core/Src/main.c) kóduj/dekóuje dáta do Manchester (IEEE 802.3) kódu a môže posielať/prímať.
+[Program](./Core/Src/main.c) kóduj/dekóuje dáta do Manchester (IEEE 802.3) kódu a môže posielať/prímať dáta cez GPIO.
 
 //Sú predvolné vývodu a časovač.
 
